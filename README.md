@@ -1,2 +1,2 @@
-# handwriting-evidence-evaluation-fourier-based-feature-extraction
+# Handwriting Evidence Evaluation: Fourier based Feature Extraction
 This repository contains a demonstration of the work titled "Bayesian MANOVA for Handwriting Evidence Evaluation: Fourier-Based Feature Extraction." It includes the implementation of Fourier series to extract Fourier coefficients as features. Additionally, it covers Bayesian modeling and Bayes factor calculation to support hypothesis testing.
