@@ -11,8 +11,7 @@ $H_2$: the person of interest (PoI) is not the writer of the questioned document
 First of all, $n_1>0$ characters are selected from the 
 anonymous manuscript document; these are referred to as questioned material. Then, $n_2>0$ characters are selected from the handwritten material originating from the person of interest; these are referred to as control material or reference material. Measurements (i.e., Fourier coefficients and the surface size) made on questioned and control material are denoted by: 
 
-
-$\mathbf{y}_{w....} = (\mathbf{y}_{w\ell j.}$, w=1,2, $\ell=1,...,L$, $j=1,...,n_{w\ell}$, 
+$\mathbf{y}_{w\ell j.}$, w=1,2, $\ell=1,...,L$, $j=1,...,n_{w\ell}$, 
 
 with $\mathbf{y}_1$ denoting the measurements made on the questioned material and $\mathbf{y}_2$ the measurements made on the control material. Thus, it is crucial to provide information about the value of the evidence $(\mathbf{y}_1,\mathbf{y}_2)$ in support of the competing propositions. This is given by the ratio of the marginal likelihoods under the competing propositions:
 
