@@ -3,10 +3,10 @@ This repository contains a demonstration of the work titled "Bayesian MANOVA for
 
 
 Forensic document examiners frequently need to cope with situations involving handwritten documents whose writership is questioned. Consider the following scenario involving an handwritten document whose origin is contested. Written material originating from an individual who is suspected to be the actual source of the disputed item is collected and examined for comparative purposes. The available evidence should be evaluated under a set of propositions in a given framework of information put forward by opposing parties (i.e., the prosecutor and the defense attorneys, respectively) at trial. The propositions of interest can therefore be formulated as follows:
- \begin{itemize}
+
 $H_1$: the person of interest (PoI) is the writer of the questioned document;
 $H_2$: the person of interest (PoI) is not the writer of the questioned document.
-\end{itemize}
+
 
 First of all, $n_1>0$ characters are selected from the 
 anonymous manuscript document; these are referred to as questioned material. Then, $n_2>0$ characters are selected from the handwritten material originating from the person of interest; these are referred to as control material or reference material. Measurements (i.e., Fourier coefficients and the surface size) made on questioned and control material with $\mathbf{y}_1$ denoting the measurements made on the questioned material and $\mathbf{y}_2$ the measurements made on the control material. Thus, it is crucial to provide information about the value of the evidence $(\mathbf{y}_1,\mathbf{y}_2)$ in support of the competing propositions. This is given by the ratio of the marginal likelihoods under the competing propositions:
