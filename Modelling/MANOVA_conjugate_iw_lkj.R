@@ -1,4 +1,3 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -9,7 +8,7 @@ library(CholWishart)
 
 set.seed(2)
 
-#"93"  "62"  "87"  "118" "332" "151" "123" "26"  "112" "334" "60"  "90"  "92"  "61"  "37"  "111" "109" "113" "114" "25" 
+#writers ids: "93"  "62"  "87"  "118" "332" "151" "123" "26"  "112" "334" "60"  "90"  "92"  "61"  "37"  "111" "109" "113" "114" "25" 
 
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
