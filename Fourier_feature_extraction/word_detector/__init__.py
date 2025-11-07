@@ -1,3 +1,11 @@
+"""
+Code adapted from the WordDetector project:
+https://github.com/githubharald/WordDetector
+
+Original author: Harald Scheidl
+License: Refer to the repository for licensing details.
+"""
+
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import List
