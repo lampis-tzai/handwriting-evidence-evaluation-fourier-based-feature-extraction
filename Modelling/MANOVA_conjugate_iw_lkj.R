@@ -244,8 +244,8 @@ stan_data_H1_2 <- list(N = nrow(suspect_data),
 
 library(rstan)
 library(bridgesampling)
-stan_model_manova_iw <- stan_model(file = "MANOVA_iw_model.stan", model_name = "MANOVA_iw")
-stan_model__manova_lkj <- stan_model(file = "MANOVA_lkj_model.stan", model_name = "MANOVA_lkj")
+stan_model_manova_iw <- stan_model(file = "Stan_Models/MANOVA_iw_model.stan", model_name = "MANOVA_iw")
+stan_model__manova_lkj <- stan_model(file = "Stan_Models/MANOVA_lkj_model.stan", model_name = "MANOVA_lkj")
 
 assess_BF <- function(stan_model,stan_data_H0,stan_data_H1_1,stan_data_H1_2){
   fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains = 2, cores=2)

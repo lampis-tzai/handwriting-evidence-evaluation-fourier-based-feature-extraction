@@ -155,8 +155,8 @@ stan_data_H1_2 <- list(N = nrow(suspect_data),
 # Fit the model
 library(rstan)
 library(bridgesampling)
-stan_model_niw <- stan_model(file = "niw.stan", model_name = "niw")
-stan_model_nlkj <- stan_model(file = "normal_lkj_model.stan", model_name = "normal_lkj_model")
+stan_model_niw <- stan_model(file = "Stan_models/niw.stan", model_name = "niw")
+stan_model_nlkj <- stan_model(file = "Stan_models/normal_lkj_model.stan", model_name = "normal_lkj_model")
 
 assess_BF <- function(stan_model,stan_data_H0,stan_data_H1_1,stan_data_H1_2){
   fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains = 2, cores=2)
