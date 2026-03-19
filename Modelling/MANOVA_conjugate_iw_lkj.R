@@ -1,3 +1,4 @@
+setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -43,11 +44,11 @@ writer_data = rbind(suspect_data,questioned_data)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "93", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "60", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "62", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "90", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("93", "62")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("60", "90")), ]
 
 # Function to find low-frequency characters
 get_small_groups <- function(data, threshold) {
@@ -72,9 +73,13 @@ replace_rare <- function(data, rare_chars) {
 }
 
 # Apply to all datasets
-writer_data_1 <- replace_rare(writer_data_1, reference_rare_chars)
-writer_data_2 <- replace_rare(writer_data_2, reference_rare_chars)
-background_data <- replace_rare(background_data, reference_rare_chars)
+# writer_data_1 <- replace_rare(writer_data_1, reference_rare_chars)
+# writer_data_2 <- replace_rare(writer_data_2, reference_rare_chars)
+# background_data <- replace_rare(background_data, reference_rare_chars)
+
+# writer_data_1 <- writer_data_1[!(writer_data_1$character %in% reference_rare_chars),]
+# writer_data_2 <- writer_data_2[!(writer_data_2$character %in% reference_rare_chars),]
+# background_data <- background_data[!(background_data$character %in% reference_rare_chars),]
 
 # Optional: restrict all datasets to shared characters only
 int_characters <- sort(intersect(background_data$character,
@@ -117,18 +122,18 @@ nw_hat = nw.min
 a_data = background_data[(background_data$character=='a'),1:p]
 mu_hat=matrix(colMeans(a_data),nrow = 1)
 
-# S = 0
-# for (w in unique(background_data$writer_id)){
-#   df_writer = background_data[(
-#     background_data$character=='a')& (background_data$writer_id==w),]
-# 
-#   theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
-#   S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-#   S <- S + S.this
-# }
-# 
-# B_hat = S/(length(unique(background_data$writer_id)) - 1)
-B_hat = cov(a_data)
+S = 0
+for (w in unique(background_data$writer_id)){
+  df_writer = background_data[(
+    background_data$character=='a')& (background_data$writer_id==w),]
+
+  theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
+  S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+  S <- S + S.this
+}
+
+B_hat = S/(length(unique(background_data$writer_id)) - 1)
+#B_hat = cov(a_data)
 
 if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
 
@@ -141,25 +146,25 @@ for (l_id in 1:l){
   letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
   beta_l = colMeans(letter_diff)
   beta_mu[l_id,] = beta_l
-  # S = 0
-  # for (w in unique(background_data$writer_id)){
-  #   letter_writer = background_data[(
-  #     background_data$character==int_characters[l_id])& (background_data$writer_id==w),1:p]
-  #   if (nrow(letter_writer)>3){
-  #     a_data_writer = background_data[(
-  #       background_data$character=='a')& (background_data$writer_id==w),1:p]
-  # 
-  #     mu_hat_writer=matrix(colMeans(a_data_writer),nrow = 1)
-  # 
-  #     letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
-  # 
-  #     beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-  #     S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))
-  #     S <- S + S.this
-  #   }
-  # }
-  # B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
-  B_hat_l = cov(letter_data)
+  S = 0
+  for (w in unique(background_data$writer_id)){
+    letter_writer = background_data[(
+      background_data$character==int_characters[l_id])& (background_data$writer_id==w),1:p]
+    if (nrow(letter_writer)>3){
+      a_data_writer = background_data[(
+        background_data$character=='a')& (background_data$writer_id==w),1:p]
+
+      mu_hat_writer=matrix(colMeans(a_data_writer),nrow = 1)
+
+      letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
+
+      beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
+      S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))
+      S <- S + S.this
+    }
+  }
+  B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
+  #B_hat_l = cov(letter_data)
   if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
   beta_cov[,,l_id] = B_hat_l
 }
@@ -180,7 +185,7 @@ for (i in 1:dim(beta_cov)[3]) {
   beta_cov_list[[i]] <- beta_cov[, , i]
 }
 
-eta=1
+eta=4
 
 #fit <- fitdistr(all_diagonals, "cauchy")
 #print(fit)
@@ -248,9 +253,9 @@ stan_model_manova_iw <- stan_model(file = "Stan_Models/MANOVA_iw_model.stan", mo
 stan_model__manova_lkj <- stan_model(file = "Stan_Models/MANOVA_lkj_model.stan", model_name = "MANOVA_lkj")
 
 assess_BF <- function(stan_model,stan_data_H0,stan_data_H1_1,stan_data_H1_2){
-  fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains = 2, cores=2)
-  fit_H1_1 <- sampling(stan_model, data = stan_data_H1_1, iter = 2000, chains = 2, cores=2)
-  fit_H1_2 <- sampling(stan_model, data = stan_data_H1_2, iter = 2000, chains = 2, cores=2)
+  fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains = 1, cores=1)
+  fit_H1_1 <- sampling(stan_model, data = stan_data_H1_1, iter = 2000, chains = 1, cores=1)
+  fit_H1_2 <- sampling(stan_model, data = stan_data_H1_2, iter = 2000, chains = 1, cores=1)
   
   samples_H0 <- extract(fit_H0)
   samples_H1_1 <- extract(fit_H1_1)

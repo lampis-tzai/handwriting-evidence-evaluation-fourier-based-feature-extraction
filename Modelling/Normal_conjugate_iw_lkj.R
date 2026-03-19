@@ -89,15 +89,15 @@ Sw = 0
 for (w in unique(background_data$writer_id)){
   df_writer = background_data[(background_data$writer_id==w),]
   var_data = unname(as.matrix(df_writer[,1:p]))
-  #theta_w = matrix(colMeans(var_data), nrow = 1)
-  #S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-  #S <- S + S.this
+  theta_w = matrix(colMeans(var_data), nrow = 1)
+  S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+  S <- S + S.this
   Cov.this = cov(var_data)*(nrow(df_writer)-1) 
   Sw <- Sw + Cov.this
 } 
 
-#B_hat = S/(length(unique(background_data$writer_id)) - 1)
-B_hat = cov(background_data[,1:p])
+B_hat = S/(length(unique(background_data$writer_id)) - 1)
+#B_hat = cov(background_data[,1:p])
 if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
 
 
