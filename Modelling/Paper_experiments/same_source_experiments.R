@@ -16,9 +16,12 @@ source('Paper_experiments/Stan_BF_calculation.R')
 
 set.seed(2)
 
+
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
+
+IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -39,6 +42,10 @@ IAM_data$character <- ifelse(IAM_data$character %in% popular_ch,
                              'other')
 
 table(IAM_data$character)
+
+char_probs <- as.data.frame(table(IAM_data$character)) %>%
+  rename(character = Var1, n = Freq) %>%
+  mutate(p_global = n / sum(n))
 
 
 background_statistics_niw <- function(background_data){
@@ -168,7 +175,7 @@ stan_model_manova_lkj <- stan_model(file = "Stan_models/MANOVA_lkj_model.stan", 
 write_xlsx(data.frame(),"Paper_experiments/same_source_results_iter.xlsx")
 
 
-same_source_def <- function(character_data,w){
+same_source_def <- function(character_data,w, char_probs){
   
   df_all<-data.frame()
   
@@ -177,17 +184,18 @@ same_source_def <- function(character_data,w){
   
   for (iter_for_eval in (1:3)){
     
-    questioned_data <- data.frame()
-    suspect_data <- data.frame()
-    for (ch in unique(writer_data_all$character)){
-      writer_data_c <- writer_data_all[(writer_data_all$character==ch),]
-      random_percentage <- runif(1,0.35,0.65)
-      smp_size <- round(random_percentage * nrow(writer_data_c))
-      suspect_ind <- sample(seq_len(nrow(writer_data_c)), size = smp_size)
-      
-      questioned_data <- rbind(questioned_data,writer_data_c[suspect_ind, ])
-      suspect_data <- rbind(suspect_data, writer_data_c[-suspect_ind, ])
-    }
+    
+    writer_data <- writer_data_all %>%
+      left_join(char_probs, by = "character")%>%
+      slice_sample(
+        n        = 100,        # or fewer if that writer has fewer rows
+        weight_by = p_global,
+        replace  = FALSE
+      )
+
+    
+    questioned_data <- writer_data[1:50]
+    suspect_data <- writer_data[51:100]
     
     
     # intersect characters
@@ -198,7 +206,7 @@ same_source_def <- function(character_data,w){
   
     # character frequency check
     char_counts <- table(questioned_data$character)
-    valid_chars <- names(char_counts[char_counts >= 2])
+    valid_chars <- names(char_counts[char_counts >= 3])
   
     questioned_data$character <- ifelse(
       questioned_data$character %in% valid_chars,

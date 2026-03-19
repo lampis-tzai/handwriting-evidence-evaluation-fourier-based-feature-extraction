@@ -1,8 +1,18 @@
+setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(dplyr)
 library(readxl)
 
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
+
+library(PerformanceAnalytics)
+
+chart.Correlation(
+  R          = IAM_data[IAM_data$writer_id=='88',2:9],
+  histogram  = TRUE,            # histograms on diagonal
+  method     = "pearson",       # or "spearman", "kendall"
+  pch        = 19               # point symbol in scatterplots
+)
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 # Step 1: Rename columns for clarity

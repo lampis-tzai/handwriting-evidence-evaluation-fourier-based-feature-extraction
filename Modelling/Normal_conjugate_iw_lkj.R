@@ -11,6 +11,8 @@ set.seed(2)
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
+IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -38,11 +40,11 @@ for (c in int_characters){
 writer_data = rbind(suspect_data,questioned_data)
 
 # different writers
-writer_data_1 = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
+writer_data_1 = IAM_data[(IAM_data$writer_id=="62"),]
 
-writer_data_2 = IAM_data[(IAM_data$writer_id==writers_ids[2]),]
+writer_data_2 = IAM_data[(IAM_data$writer_id=="93"),]
 
-background_data = IAM_data[!(IAM_data$writer_id %in% c(writers_ids[1],writers_ids[2])),]
+background_data = IAM_data[!(IAM_data$writer_id %in% c("62","93")),]
 
 
 int_characters = sort(intersect(background_data$character,

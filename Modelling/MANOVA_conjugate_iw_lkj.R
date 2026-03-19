@@ -14,9 +14,9 @@ set.seed(2)
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
-p <- 9
+IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
 
-IAM_data = cbind(scale(IAM_data[,1:p]),IAM_data[,(p+1):ncol(IAM_data)])
+IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
 
@@ -44,11 +44,11 @@ writer_data = rbind(suspect_data,questioned_data)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "60", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "90", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "90", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "112", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("60", "90")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("90", "112")), ]
 
 # Function to find low-frequency characters
 get_small_groups <- function(data, threshold) {
@@ -72,7 +72,7 @@ replace_rare <- function(data, rare_chars) {
   return(data)
 }
 
-# Apply to all datasets
+#Apply to all datasets
 # writer_data_1 <- replace_rare(writer_data_1, reference_rare_chars)
 # writer_data_2 <- replace_rare(writer_data_2, reference_rare_chars)
 # background_data <- replace_rare(background_data, reference_rare_chars)
@@ -185,7 +185,7 @@ for (i in 1:dim(beta_cov)[3]) {
   beta_cov_list[[i]] <- beta_cov[, , i]
 }
 
-eta=4
+eta=1
 
 #fit <- fitdistr(all_diagonals, "cauchy")
 #print(fit)
@@ -320,4 +320,3 @@ BF_manova_conjugate <- log_lik_H0-log_lik_H1_1-log_lik_H1_2
 print(BF_manova_conjugate)
 print(BF_manova_iw)
 print(BF_manova_lkj)
-
