@@ -20,96 +20,109 @@ IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
 
+
 #same person
 
-writer_data = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
+writer_data_all = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
 background_data = IAM_data[(IAM_data$writer_id!=writers_ids[1]),]
 
-int_characters = sort(intersect(writer_data$character,background_data$character))
-l = length(int_characters)
+sample_size <- min(200, nrow(writer_data_all))
 
-questioned_data = data.frame()
-suspect_data = data.frame()
-for (c in int_characters){
-  writer_data_c = writer_data[(writer_data$character==c),]
-  random_percentage = runif(1,0.35,0.65)
-  smp_size <- floor(random_percentage * nrow(writer_data_c))
-  suspect_ind <- sample(seq_len(nrow(writer_data_c)), size = smp_size)
-  
-  questioned_data = rbind(questioned_data,writer_data_c[suspect_ind, ])
-  suspect_data = rbind(suspect_data, writer_data_c[-suspect_ind, ])
-}
+writer_data <- writer_data_all %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
 
-writer_data = rbind(suspect_data,questioned_data)
+questioned_data <- writer_data[1:100,]
+suspect_data <- writer_data[101:200,]
+
+# intersect characters
+#int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
+
+#questioned_data$character <- questioned_data[questioned_data$character %in% int_characters, ]
+#suspect_data$character <- suspect_data[suspect_data$character %in% int_characters, ]
+
+#alphabet_map <- setNames(seq_along(int_characters), int_characters) 
+
+#background_data <- background_data_all[background_data_all$character %in% int_characters,]
+
+int_characters <- sort(unique(IAM_data$character))
+l <- length(int_characters)
+
+questioned_data$character <- factor(questioned_data$character, levels = int_characters)
+suspect_data$character <- factor(suspect_data$character, levels = int_characters)
+
+table(questioned_data$character)
+table(suspect_data$character)
+
+alphabet_map <- setNames(seq_along(int_characters), int_characters) 
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "90", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "112", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "152", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("90", "112")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "152")), ]
 
-# Function to find low-frequency characters
-get_small_groups <- function(data, threshold) {
-  tab <- table(data$character)
-  names(tab[tab < threshold])
-}
+sample_size <- min(100, nrow(writer_data_1))
 
-# Find rare characters in each dataset
-small_1 <- get_small_groups(writer_data_1, p)
-small_2 <- get_small_groups(writer_data_2, p)
-small_bg <- get_small_groups(background_data, p)
+questioned_data <- writer_data_1 %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
 
-# Determine reference based on who has the most rare characters
-rare_counts <- c(length(small_1), length(small_2), length(small_bg))
-ref_index <- which.max(rare_counts)
-reference_rare_chars <- list(small_1, small_2, small_bg)[[ref_index]]
+sample_size <- min(100, nrow(writer_data_2))
+suspect_data <- writer_data_2 %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
 
-# Replace rare characters with "OTHERS"
-replace_rare <- function(data, rare_chars) {
-  data$character <- ifelse(data$character %in% rare_chars, "z-others", data$character)
-  return(data)
-}
+#questioned_data_old = questioned_data
+#suspect_data_old = suspect_data
 
-#Apply to all datasets
-# writer_data_1 <- replace_rare(writer_data_1, reference_rare_chars)
-# writer_data_2 <- replace_rare(writer_data_2, reference_rare_chars)
-# background_data <- replace_rare(background_data, reference_rare_chars)
+# questioned_data = questioned_data_old
+# suspect_data = suspect_data_old
 
-# writer_data_1 <- writer_data_1[!(writer_data_1$character %in% reference_rare_chars),]
-# writer_data_2 <- writer_data_2[!(writer_data_2$character %in% reference_rare_chars),]
-# background_data <- background_data[!(background_data$character %in% reference_rare_chars),]
+int_characters <- sort(unique(IAM_data$character))
+l <- length(int_characters)
 
-# Optional: restrict all datasets to shared characters only
-int_characters <- sort(intersect(background_data$character,
-                                 intersect(writer_data_1$character, writer_data_2$character)))
+questioned_data$character <- factor(questioned_data$character, levels = int_characters)
+suspect_data$character <- factor(suspect_data$character, levels = int_characters)
 
-l = length(int_characters)
+alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
-questioned_data = data.frame()
-suspect_data = data.frame()
-for (c in int_characters){
-  writer_data_1_c = writer_data_1[(writer_data_1$character == c),]
-  if (nrow(writer_data_1_c)<5){
-    questioned_data = rbind(questioned_data,writer_data_1_c)
-  } else{
-    random_percentage1 = runif(1,0.35,0.65)
-    smp_size <- round(random_percentage1 * nrow(writer_data_1_c))
-    ind <- sample(seq_len(nrow(writer_data_1_c)), size = smp_size)
-    questioned_data = rbind(questioned_data,writer_data_1_c[ind, ])
-  }
-  
-  writer_data_2_c = writer_data_2[(writer_data_2$character==c),]
-  if (nrow(writer_data_2_c)<5){
-    suspect_data = rbind(suspect_data,writer_data_2_c)
-  } else{
-    smp_size <- round((1-random_percentage1) * nrow(writer_data_2_c))
-    ind <- sample(seq_len(nrow(writer_data_2_c)), size = smp_size)
-    suspect_data = rbind(suspect_data,writer_data_2_c[ind, ])
-  }
-  print(dim(writer_data_2_c[ind, ]))
-}
+# int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
+# 
+# l <- length(int_characters)
+# 
+# alphabet_map <- setNames(seq_along(int_characters), int_characters)
+# 
+# 
+# questioned_data$character <- ifelse(questioned_data$character %in% int_characters,
+#                                    questioned_data$character,
+#                                    'o')
+# 
+# suspect_data$character <- ifelse(suspect_data$character %in% int_characters,
+#                                    suspect_data$character,
+#                                    'o')
+# 
+# background_data$character <- ifelse(background_data$character %in% int_characters,
+#                                    background_data$character,
+#                                 'o')
+
+table(questioned_data$character)
+table(suspect_data$character)
+
 
 writer_data = rbind(suspect_data,questioned_data)
 
@@ -199,7 +212,7 @@ sc <- sd(log(diag(W_hat)))
 
 # Create mapping: letter -> number based on alphabetical order
 
-alphabet_map <- setNames(seq_along(int_characters), int_characters)
+
 
 # Stan data list
 stan_data_H0 <- list(N = nrow(writer_data), 
@@ -286,7 +299,7 @@ marginal_likelihood_manova_conjugate<- function(stan_data){
   k0 = diag(0.5,l,l)
   U0 = stan_data$U
   
-  writer_x = unname(model.matrix(~factor(stan_data$letters)))
+  writer_x = unname(model.matrix(~factor(stan_data$letters,levels = 1:l)))
   
   writer_y = as.matrix(stan_data$y)
   
@@ -320,3 +333,4 @@ BF_manova_conjugate <- log_lik_H0-log_lik_H1_1-log_lik_H1_2
 print(BF_manova_conjugate)
 print(BF_manova_iw)
 print(BF_manova_lkj)
+

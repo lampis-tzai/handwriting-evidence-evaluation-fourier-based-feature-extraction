@@ -180,7 +180,7 @@ marginal_likelihood_manova_conjugate<- function(w_data,stan_data){
   k0 = diag(0.5,l,l)
   U0 = stan_data$U
   
-  writer_x = unname(model.matrix(~factor(stan_data$letters)))
+  writer_x = unname(model.matrix(~factor(stan_data$letters,levels = 1:l)))
   
   writer_y = as.matrix(stan_data$y)
   
@@ -209,7 +209,7 @@ MANOVA_conjugate <- function(questioned_data, suspect_data, background_stats){
   
   writer_data = rbind(questioned_data,suspect_data)
   
-  l = length(unique(writer_data$character))
+  l = dim(background_stats[[4]])[3]
   
   
   
@@ -266,7 +266,7 @@ MANOVA_iw <- function(questioned_data, suspect_data, background_stats){
   
   writer_data <- rbind(questioned_data,suspect_data)
   
-  l = length(unique(writer_data$character))
+  l = dim(background_stats[[4]])[3]
   
   beta_cov <-background_stats[[4]]
   beta_cov_list <- vector("list", dim(beta_cov)[3])
@@ -322,7 +322,7 @@ MANOVA_LKJ <- function(questioned_data, suspect_data, background_stats){
   
   writer_data <- rbind(questioned_data,suspect_data)
   
-  l = length(unique(writer_data$character))
+  l = dim(background_stats[[4]])[3]
   
   beta_cov <-background_stats[[4]]
   beta_cov_list <- vector("list", dim(beta_cov)[3])

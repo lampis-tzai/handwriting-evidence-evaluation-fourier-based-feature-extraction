@@ -26,27 +26,16 @@ IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
 
-char_table <- IAM_data %>%
-  count(writer_id, character, name = "n")
-
 
 count_ch = as.data.frame(IAM_data %>% group_by(writer_id,character) %>% 
                            count()%>% 
                            group_by(character) %>% 
                            summarise(count = sum(n>18)))
 
-popular_ch<-count_ch$character[count_ch$count>20]
+count_ch
 
-IAM_data$character <- ifelse(IAM_data$character %in% popular_ch,
-                             IAM_data$character,
-                             'other')
 
 table(IAM_data$character)
-
-char_probs <- as.data.frame(table(IAM_data$character)) %>%
-  rename(character = Var1, n = Freq) %>%
-  mutate(p_global = n / sum(n))
-
 
 background_statistics_niw <- function(background_data){
   
@@ -61,7 +50,7 @@ background_statistics_niw <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       var_data = unname(as.matrix(df_writer[,1:p]))
       theta_w = matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
@@ -99,7 +88,7 @@ background_statistics_br <- function(background_data){
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
@@ -116,7 +105,7 @@ background_statistics_br <- function(background_data){
   for (l_id in 1:l){
     letter_data = as.matrix(unname(background_data[(
       background_data$character==l_id),1:p]))
-    if (nrow(letter_data)>3){
+    if (nrow(letter_data)>2){
       letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
       beta_l = colMeans(letter_diff)
       beta_mu[l_id,] = beta_l
@@ -124,7 +113,7 @@ background_statistics_br <- function(background_data){
       for (w in unique(background_data$writer_id)){
         letter_writer = background_data[(
           background_data$character==l_id)& (background_data$writer_id==w),1:p]
-        if (nrow(letter_writer)>3){
+        if (nrow(letter_writer)>2){
           a_data_writer = background_data[(
             background_data$character==1)& (background_data$writer_id==w),1:p]
           
@@ -148,7 +137,7 @@ background_statistics_br <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
@@ -177,6 +166,9 @@ write_xlsx(data.frame(),"Paper_experiments/same_source_results_iter.xlsx")
 
 same_source_def <- function(character_data,w, char_probs){
   
+  all_chars <- sort(unique(character_data$character))
+  l <- length(all_chars)
+  
   df_all<-data.frame()
   
   writer_data_all <- character_data[(character_data$writer_id==w),]
@@ -184,133 +176,103 @@ same_source_def <- function(character_data,w, char_probs){
   
   for (iter_for_eval in (1:3)){
     
+    sample_size <- min(200, nrow(writer_data_all))
     
     writer_data <- writer_data_all %>%
-      left_join(char_probs, by = "character")%>%
+      add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
-        n        = 100,        # or fewer if that writer has fewer rows
-        weight_by = p_global,
-        replace  = FALSE
+        n = sample_size,       # now it's a constant
+        weight_by = char_freq, # weighted sampling
+        replace = FALSE
       )
-
     
-    questioned_data <- writer_data[1:50]
-    suspect_data <- writer_data[51:100]
-    
+    questioned_data <- writer_data[1:100,]
+    suspect_data <- writer_data[101:200,]
     
     # intersect characters
-    int_characters <- intersect(questioned_data$character,suspect_data$character)
-  
-    questioned_data <- questioned_data[questioned_data$character %in% int_characters, ]
-    suspect_data <- suspect_data[suspect_data$character %in% int_characters, ]
-  
-    # character frequency check
-    char_counts <- table(questioned_data$character)
-    valid_chars <- names(char_counts[char_counts >= 3])
-  
-    questioned_data$character <- ifelse(
-      questioned_data$character %in% valid_chars,
-      questioned_data$character,
-      "other"
-     )
-   
-    suspect_data$character <- ifelse(
-      suspect_data$character %in% valid_chars,
-      suspect_data$character,
-      "other"
-    )
-  
-    # final intersection after recoding
-    int_characters <- sort(intersect(
-      questioned_data$character,
-      suspect_data$character
-    ))
-  
-    questioned_data <- questioned_data[
-      questioned_data$character %in% int_characters, ]
-  
-    suspect_data <- suspect_data[
-      suspect_data$character %in% int_characters, ]
+    #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
     
-    alphabet_map <- setNames(seq_along(int_characters), int_characters) 
-  
-  
+    #questioned_data$character <- questioned_data[questioned_data$character %in% int_characters, ]
+    #suspect_data$character <- suspect_data[suspect_data$character %in% int_characters, ]
+    
+    #alphabet_map <- setNames(seq_along(int_characters), int_characters) 
+    
+    #background_data <- background_data_all[background_data_all$character %in% int_characters,]
+    
+    questioned_data$character <- factor(questioned_data$character, levels = all_chars)
+    suspect_data$character <- factor(suspect_data$character, levels = all_chars)
+    
+    #table(questioned_data$character)
+    #table(suspect_data$character)
+    
+    alphabet_map <- setNames(seq_along(all_chars), all_chars) 
+    
+    
     questioned_data$character <- as.numeric(alphabet_map[questioned_data$character]) 
     suspect_data$character <- as.numeric(alphabet_map[suspect_data$character])
-  
-    background_data <- background_data_all %>%
-      filter(
-        character %in% names(char_counts)) %>%
-      group_by(writer_id) %>%
-      filter(n_distinct(character) == length(unique(names(char_counts)))) %>%
-      ungroup()
-  
-    background_data <- background_data %>%
-      mutate(
-        character = if_else(
-          !character %in% valid_chars,
-          "other",
-          character
-        )
-      )
-  
-  
+    
+    
     background_data$character <- as.numeric(alphabet_map[background_data$character])
     
-    chars <- unique(questioned_data$character)
+    chars <- unique(writer_data$character)
     bf_rows <- vector("list", length(chars))
     
     i <- 1
     for (ch in chars) {
-      background_stats_niw_ch <- background_statistics_niw(
-        background_data[background_data$character == ch, ]
-      )
+      questioned_data_ch <- questioned_data[questioned_data$character == ch, ]
+      suspect_data_ch <- suspect_data[suspect_data$character == ch, ]
       
-      niw_conjugate_ch <- niw_conjugate(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
-      
-      niw_ch <- normal_iW(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
-      
-      nlkj_ch <- normal_lkj(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
-      
-      # 3 rows per character: one for each model
-      bf_rows[[i]] <- data.frame(
-        writer    = w,
-        character = names(alphabet_map[ch]),
-        model     = c("niw_conjugate", "niw", "nlkj"),
-        BF        = c(niw_conjugate_ch, niw_ch, nlkj_ch)
-      )
-      i <- i + 1
+      if ((nrow(questioned_data_ch)>1) & (nrow(suspect_data_ch)>1)){
+        
+        background_stats_niw_ch <- background_statistics_niw(
+          background_data[background_data$character == ch, ]
+        )
+        niw_conjugate_ch <- niw_conjugate(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        niw_ch <- normal_iW(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        nlkj_ch <- normal_lkj(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        # 3 rows per character: one for each model
+        bf_rows[[i]] <- data.frame(
+          writer = w,
+          character = names(alphabet_map[ch]),
+          model     = c("niw_conjugate", "niw", "nlkj"),
+          BF        = c(niw_conjugate_ch, niw_ch, nlkj_ch)
+        )
+        i <- i + 1
+      }
     }
     
-
+    
     background_stats_niw_all <- background_statistics_niw(background_data)
-
+    
     niw_conjugate_all <- niw_conjugate(questioned_data,
-                                    suspect_data,
-                                    background_stats_niw_all)
-
+                                       suspect_data,
+                                       background_stats_niw_all)
+    
     niw_all <- normal_iW(questioned_data,
-                      suspect_data,
-                      background_stats_niw_all)
-
+                         suspect_data,
+                         background_stats_niw_all)
+    
     nlkj <- normal_lkj(questioned_data,
-                      suspect_data,
-                      background_stats_niw_all)
-
+                       suspect_data,
+                       background_stats_niw_all)
+    
     bf_rows[[i]] <- data.frame(
-      writer    = w,
+      writer = w,
       character = 'all',
       model     = c("niw_conjugate", "niw", "nlkj"),
       BF        = c(niw_conjugate_all, niw_all, nlkj)
@@ -319,20 +281,22 @@ same_source_def <- function(character_data,w, char_probs){
     
     background_stats_br <- background_statistics_br(background_data)
     
+    
+    
     manova_conjugate <- MANOVA_conjugate(questioned_data,
-                                      suspect_data,
-                                      background_stats_br)
+                                         suspect_data,
+                                         background_stats_br)
     
     manova_iw <- MANOVA_iw(questioned_data,
-                        suspect_data,
-                        background_stats_br)
+                           suspect_data,
+                           background_stats_br)
     
     manova_lkj <- MANOVA_LKJ(questioned_data,
-                      suspect_data,
-                      background_stats_br)
-
+                             suspect_data,
+                             background_stats_br)
+    
     bf_rows[[i]] <- data.frame(
-      writer    = w,
+      writer = w,
       character = 'all',
       model     = c("manova_conjugate", "manova_iw", "manova_lkj"),
       BF        = c(manova_conjugate, manova_iw, manova_lkj)
@@ -342,8 +306,8 @@ same_source_def <- function(character_data,w, char_probs){
     bf_df <- bind_rows(bf_rows)
     
     df_new <- bf_df
-      
-    print(paste0("Writer:",w,", iteration:",iter_for_eval))
+    
+    print(paste0("Writer: ",w,", iteration:",iter_for_eval))
     
     df_all = rbind(df_all,df_new)
   }
@@ -353,7 +317,7 @@ same_source_def <- function(character_data,w, char_probs){
   return(df_all)
 }
 
-#same_source_def(IAM_data,'85')
+#same_source_def(IAM_data,'85',char_probs)
 
 detectCores()
 cl <- makeCluster(5,
@@ -380,7 +344,8 @@ w.list <- sapply(unique(IAM_data$writer_id), list)
 
 system.time({saves = parLapply(cl, w.list,
                                same_source_def,
-                               character_data = IAM_data)})
+                               character_data = IAM_data,
+                               char_probs = char_probs)})
 
 stopCluster(cl)
 

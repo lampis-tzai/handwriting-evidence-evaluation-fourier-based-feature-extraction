@@ -19,61 +19,106 @@ writers_ids <- unique(IAM_data$writer_id)
 
 #same person
 
-writer_data = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
+writer_data_all = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
 background_data = IAM_data[(IAM_data$writer_id!=writers_ids[1]),]
 
-int_characters = sort(intersect(writer_data$character,background_data$character))
-l = length(int_characters)
+sample_size <- min(200, nrow(writer_data_all))
 
-questioned_data = data.frame()
-suspect_data = data.frame()
-for (c in int_characters){
-  writer_data_c = writer_data[(writer_data$character==c),]
-  random_percentage = runif(1,0.35,0.65)
-  smp_size <- floor(random_percentage * nrow(writer_data_c))
-  suspect_ind <- sample(seq_len(nrow(writer_data_c)), size = smp_size)
-  
-  questioned_data = rbind(questioned_data,writer_data_c[suspect_ind, ])
-  suspect_data = rbind(suspect_data, writer_data_c[-suspect_ind, ])
-}
+writer_data <- writer_data_all %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
 
-writer_data = rbind(suspect_data,questioned_data)
+questioned_data <- writer_data[1:100,]
+suspect_data <- writer_data[101:200,]
+
+# intersect characters
+#int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
+
+#questioned_data$character <- questioned_data[questioned_data$character %in% int_characters, ]
+#suspect_data$character <- suspect_data[suspect_data$character %in% int_characters, ]
+
+#alphabet_map <- setNames(seq_along(int_characters), int_characters) 
+
+#background_data <- background_data_all[background_data_all$character %in% int_characters,]
+
+int_characters <- sort(unique(IAM_data$character))
+l <- length(int_characters)
+
+questioned_data$character <- factor(questioned_data$character, levels = int_characters)
+suspect_data$character <- factor(suspect_data$character, levels = int_characters)
+
+table(questioned_data$character)
+table(suspect_data$character)
+
+alphabet_map <- setNames(seq_along(int_characters), int_characters) 
+
 
 # different writers
-writer_data_1 = IAM_data[(IAM_data$writer_id=="62"),]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
 
-writer_data_2 = IAM_data[(IAM_data$writer_id=="93"),]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "152", ]
 
-background_data = IAM_data[!(IAM_data$writer_id %in% c("62","93")),]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "152")), ]
 
+sample_size <- min(100, nrow(writer_data_1))
 
-int_characters = sort(intersect(background_data$character,
-                                intersect(writer_data_1$character,writer_data_2$character)))
-l = length(int_characters)
+questioned_data <- writer_data_1 %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
 
-questioned_data = data.frame()
-suspect_data = data.frame()
-for (c in int_characters){
-  writer_data_1_c = writer_data_1[(writer_data_1$character == c),]
-  if (nrow(writer_data_1_c)<5){
-    questioned_data = rbind(questioned_data,writer_data_1_c)
-  } else{
-    random_percentage1 = runif(1,0.35,0.65)
-    smp_size <- round(random_percentage1 * nrow(writer_data_1_c))
-    ind <- sample(seq_len(nrow(writer_data_1_c)), size = smp_size)
-    questioned_data = rbind(questioned_data,writer_data_1_c[ind, ])
-  }
-  
-  writer_data_2_c = writer_data_2[(writer_data_2$character==c),]
-  if (nrow(writer_data_2_c)<5){
-    suspect_data = rbind(suspect_data,writer_data_2_c)
-  } else{
-    smp_size <- round((1-random_percentage1) * nrow(writer_data_2_c))
-    ind <- sample(seq_len(nrow(writer_data_2_c)), size = smp_size)
-    suspect_data = rbind(suspect_data,writer_data_2_c[ind, ])
-  }
-  print(dim(writer_data_2_c[ind, ]))
-}
+sample_size <- min(100, nrow(writer_data_2))
+suspect_data <- writer_data_2 %>%
+  add_count(character, name = "char_freq") %>%  # add frequency column
+  slice_sample(
+    n = sample_size,       # now it's a constant
+    weight_by = char_freq, # weighted sampling
+    replace = FALSE
+  )
+
+#questioned_data_old = questioned_data
+#suspect_data_old = suspect_data
+
+# questioned_data = questioned_data_old
+# suspect_data = suspect_data_old
+
+int_characters <- sort(unique(IAM_data$character))
+l <- length(int_characters)
+
+questioned_data$character <- factor(questioned_data$character, levels = int_characters)
+suspect_data$character <- factor(suspect_data$character, levels = int_characters)
+
+alphabet_map <- setNames(seq_along(int_characters), int_characters)
+
+# int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
+# 
+# l <- length(int_characters)
+# 
+# alphabet_map <- setNames(seq_along(int_characters), int_characters)
+# 
+# 
+# questioned_data$character <- ifelse(questioned_data$character %in% int_characters,
+#                                    questioned_data$character,
+#                                    'o')
+# 
+# suspect_data$character <- ifelse(suspect_data$character %in% int_characters,
+#                                    suspect_data$character,
+#                                    'o')
+# 
+# background_data$character <- ifelse(background_data$character %in% int_characters,
+#                                    background_data$character,
+#                                 'o')
+
+table(questioned_data$character)
+table(suspect_data$character)
+
 
 writer_data = rbind(suspect_data,questioned_data)
 

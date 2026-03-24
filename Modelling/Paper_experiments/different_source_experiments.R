@@ -23,8 +23,6 @@ IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
 
-char_table <- IAM_data %>%
-  count(writer_id, character, name = "n")
 
 
 count_ch = as.data.frame(IAM_data %>% group_by(writer_id,character) %>% 
@@ -32,17 +30,10 @@ count_ch = as.data.frame(IAM_data %>% group_by(writer_id,character) %>%
                            group_by(character) %>% 
                            summarise(count = sum(n>18)))
 
-popular_ch<-count_ch$character[count_ch$count>20]
+count_ch
 
-IAM_data$character <- ifelse(IAM_data$character %in% popular_ch,
-                             IAM_data$character,
-                             'other')
 
 table(IAM_data$character)
-
-char_probs <- as.data.frame(table(IAM_data$character)) %>%
-  rename(character = Var1, n = Freq) %>%
-  mutate(p_global = n / sum(n))
 
 
 background_statistics_niw <- function(background_data){
@@ -58,7 +49,7 @@ background_statistics_niw <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
     var_data = unname(as.matrix(df_writer[,1:p]))
     theta_w = matrix(colMeans(var_data), nrow = 1)
     S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
@@ -96,7 +87,7 @@ background_statistics_br <- function(background_data){
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
     theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
     S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
     S <- S + S.this
@@ -113,7 +104,7 @@ background_statistics_br <- function(background_data){
   for (l_id in 1:l){
     letter_data = as.matrix(unname(background_data[(
       background_data$character==l_id),1:p]))
-    if (nrow(letter_data)>3){
+    if (nrow(letter_data)>2){
       letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
       beta_l = colMeans(letter_diff)
       beta_mu[l_id,] = beta_l
@@ -121,7 +112,7 @@ background_statistics_br <- function(background_data){
       for (w in unique(background_data$writer_id)){
         letter_writer = background_data[(
           background_data$character==l_id)& (background_data$writer_id==w),1:p]
-        if (nrow(letter_writer)>3){
+        if (nrow(letter_writer)>2){
           a_data_writer = background_data[(
             background_data$character==1)& (background_data$writer_id==w),1:p]
           
@@ -145,7 +136,7 @@ background_statistics_br <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
@@ -171,7 +162,10 @@ stan_model_manova_lkj <- stan_model(file = "Stan_models/MANOVA_lkj_model.stan", 
 
 write_xlsx(data.frame(),"Paper_experiments/different_source_results_iter.xlsx")
 
-different_source_def <- function(character_data,composition,w, char_probs){
+different_source_def <- function(character_data,composition,w){
+  
+  all_chars <- sort(unique(character_data$character))
+  l <- length(all_chars)
   
   df_all=data.frame()
   
@@ -181,85 +175,53 @@ different_source_def <- function(character_data,composition,w, char_probs){
   
   writer_data_all <- rbind(writer_data_1,writer_data_2)
   
-  background_data_all = character_data[!(character_data$writer_id %in% c(composition[w,1],
+  background_data = character_data[!(character_data$writer_id %in% c(composition[w,1],
                                                              composition[w,2])),]
   
   
   for (iter_for_eval in (1)){   
     
     
+    sample_size <- min(100, nrow(writer_data_1))
+    
     questioned_data <- writer_data_1 %>%
-      left_join(char_probs, by = "character")%>%
+      add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
-        n        = 50,        # or fewer if that writer has fewer rows
-        weight_by = p_global,
-        replace  = FALSE
+        n = sample_size,       # now it's a constant
+        weight_by = char_freq, # weighted sampling
+        replace = FALSE
       )
     
+    sample_size <- min(100, nrow(writer_data_2))
     suspect_data <- writer_data_2 %>%
-      left_join(char_probs, by = "character")%>%
+      add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
-        n        = 50,        # or fewer if that writer has fewer rows
-        weight_by = p_global,
-        replace  = FALSE
+        n = sample_size,       # now it's a constant
+        weight_by = char_freq, # weighted sampling
+        replace = FALSE
       )
     
     # intersect characters
-    int_characters <- intersect(questioned_data$character,suspect_data$character)
+    #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
     
-    questioned_data <- questioned_data[questioned_data$character %in% int_characters, ]
-    suspect_data <- suspect_data[suspect_data$character %in% int_characters, ]
+    #questioned_data$character <- questioned_data[questioned_data$character %in% int_characters, ]
+    #suspect_data$character <- suspect_data[suspect_data$character %in% int_characters, ]
     
-    # character frequency check
-    char_counts <- table(questioned_data$character)
-    valid_chars <- names(char_counts[char_counts >= 3])
+    #alphabet_map <- setNames(seq_along(int_characters), int_characters) 
     
-    questioned_data$character <- ifelse(
-      questioned_data$character %in% valid_chars,
-      questioned_data$character,
-      "other"
-    )
+    #background_data <- background_data_all[background_data_all$character %in% int_characters,]
     
-    suspect_data$character <- ifelse(
-      suspect_data$character %in% valid_chars,
-      suspect_data$character,
-      "other"
-    )
+    questioned_data$character <- factor(questioned_data$character, levels = all_chars)
+    suspect_data$character <- factor(suspect_data$character, levels = all_chars)
     
-    # final intersection after recoding
-    int_characters <- sort(intersect(
-      questioned_data$character,
-      suspect_data$character
-    ))
+    #table(questioned_data$character)
+    #table(suspect_data$character)
     
-    questioned_data <- questioned_data[
-      questioned_data$character %in% int_characters, ]
-    
-    suspect_data <- suspect_data[
-      suspect_data$character %in% int_characters, ]
-    
-    alphabet_map <- setNames(seq_along(int_characters), int_characters) 
+    alphabet_map <- setNames(seq_along(all_chars), all_chars) 
     
     
     questioned_data$character <- as.numeric(alphabet_map[questioned_data$character]) 
     suspect_data$character <- as.numeric(alphabet_map[suspect_data$character])
-    
-    
-    background_data <- background_data_all %>%
-      filter(
-        character %in% names(char_counts)) %>%
-      group_by(writer_id) %>%
-      filter(n_distinct(character) == length(unique(names(char_counts)))) %>%
-      ungroup()
-    
-    background_data <- background_data %>%
-      mutate(
-        character = if_else(
-          !character %in% valid_chars,
-          "other",
-          character
-        )
-      )
     
     
     background_data$character <- as.numeric(alphabet_map[background_data$character])
@@ -269,36 +231,42 @@ different_source_def <- function(character_data,composition,w, char_probs){
     
     i <- 1
     for (ch in chars) {
-      background_stats_niw_ch <- background_statistics_niw(
-        background_data[background_data$character == ch, ]
-      )
-      niw_conjugate_ch <- niw_conjugate(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
+      questioned_data_ch <- questioned_data[questioned_data$character == ch, ]
+      suspect_data_ch <- suspect_data[suspect_data$character == ch, ]
       
-      niw_ch <- normal_iW(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
+      if ((nrow(questioned_data_ch)>1) & (nrow(suspect_data_ch)>1)){
       
-      nlkj_ch <- normal_lkj(
-        questioned_data[questioned_data$character == ch, ],
-        suspect_data[suspect_data$character == ch, ],
-        background_stats_niw_ch
-      )
-      
-      # 3 rows per character: one for each model
-      bf_rows[[i]] <- data.frame(
-        writer1 = composition[w,1],
-        writer2 = composition[w,2],
-        character = names(alphabet_map[ch]),
-        model     = c("niw_conjugate", "niw", "nlkj"),
-        BF        = c(niw_conjugate_ch, niw_ch, nlkj_ch)
-      )
-      i <- i + 1
+        background_stats_niw_ch <- background_statistics_niw(
+          background_data[background_data$character == ch, ]
+        )
+        niw_conjugate_ch <- niw_conjugate(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        niw_ch <- normal_iW(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        nlkj_ch <- normal_lkj(
+          questioned_data_ch,
+          suspect_data_ch,
+          background_stats_niw_ch
+        )
+        
+        # 3 rows per character: one for each model
+        bf_rows[[i]] <- data.frame(
+          writer1 = composition[w,1],
+          writer2 = composition[w,2],
+          character = names(alphabet_map[ch]),
+          model     = c("niw_conjugate", "niw", "nlkj"),
+          BF        = c(niw_conjugate_ch, niw_ch, nlkj_ch)
+        )
+        i <- i + 1
+      }
     }
     
     
@@ -326,6 +294,8 @@ different_source_def <- function(character_data,composition,w, char_probs){
     i <- i + 1
     
     background_stats_br <- background_statistics_br(background_data)
+    
+    
     
     manova_conjugate <- MANOVA_conjugate(questioned_data,
                                          suspect_data,
@@ -368,8 +338,8 @@ comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
-# example_df <- different_source_def(IAM_data,comp_writers,1)
-# example_df
+#example_df <- different_source_def(IAM_data,comp_writers,259)
+#example_df
 
 cl <- makeCluster(5,
                   outfile="C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
@@ -394,8 +364,7 @@ clusterExport(cl,
 system.time({saves = parLapply(cl, w.list,
                                different_source_def,
                                character_data = IAM_data,
-                               composition = comp_writers,
-                               char_probs = char_probs)})
+                               composition = comp_writers)})
 
 stopCluster(cl)
 df_all <- do.call("rbind", saves)
@@ -409,7 +378,7 @@ dsr <- read_excel("Paper_experiments/different_source_results_iter.xlsx")
 
 dsr = as.data.frame(dsr)
 
-dsr[dsr$model=='manova_lkj',]
+dsr[(dsr$model=='manova_lkj') & (dsr$BF>0),]
 
 
 indx <- apply(dsr, 2, function(x) any(is.na(x) | is.infinite(x)))
