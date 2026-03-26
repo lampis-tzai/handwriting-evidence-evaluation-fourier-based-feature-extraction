@@ -9,16 +9,35 @@ library(CholWishart)
 
 set.seed(2)
 
-#writers ids: "93"  "62"  "87"  "118" "332" "151" "123" "26"  "112" "334" "60"  "90"  "92"  "61"  "37"  "111" "109" "113" "114" "25" 
-
 IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
+
+
+#library(PerformanceAnalytics)
+#chart.Correlation(IAM_data[,2:9], histogram = TRUE, method = "pearson")
+
+
+library(nortest)
+p_values <- array(0, dim = c(length(writers_ids),9))
+i=1
+for (w in writers_ids){
+
+  writer_data_all = IAM_data[(IAM_data$writer_id==w),1:9]
+
+  for (f in 1:9){
+    p_values[i,f] <- lillie.test(writer_data_all[,f])$p.value
+  }
+  i=i+1
+}
+colMeans(p_values>0.01)
+
 
 
 #same person
@@ -26,7 +45,7 @@ writers_ids <- unique(IAM_data$writer_id)
 writer_data_all = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
 background_data = IAM_data[(IAM_data$writer_id!=writers_ids[1]),]
 
-sample_size <- min(200, nrow(writer_data_all))
+sample_size <- min(100, nrow(writer_data_all))
 
 writer_data <- writer_data_all %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -36,8 +55,8 @@ writer_data <- writer_data_all %>%
     replace = FALSE
   )
 
-questioned_data <- writer_data[1:100,]
-suspect_data <- writer_data[101:200,]
+questioned_data <- writer_data[1:50,]
+suspect_data <- writer_data[51:100,]
 
 # intersect characters
 #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
@@ -62,13 +81,13 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "62", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "152", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "92", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "152")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("92", "62")), ]
 
-sample_size <- min(100, nrow(writer_data_1))
+sample_size <- min(50, nrow(writer_data_1))
 
 questioned_data <- writer_data_1 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -78,7 +97,7 @@ questioned_data <- writer_data_1 %>%
     replace = FALSE
   )
 
-sample_size <- min(100, nrow(writer_data_2))
+sample_size <- min(50, nrow(writer_data_2))
 suspect_data <- writer_data_2 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
   slice_sample(
@@ -87,8 +106,8 @@ suspect_data <- writer_data_2 %>%
     replace = FALSE
   )
 
-#questioned_data_old = questioned_data
-#suspect_data_old = suspect_data
+# questioned_data_old = questioned_data
+# suspect_data_old = suspect_data
 
 # questioned_data = questioned_data_old
 # suspect_data = suspect_data_old
@@ -126,14 +145,42 @@ table(suspect_data$character)
 
 writer_data = rbind(suspect_data,questioned_data)
 
+library(Hotelling)
+htest<- hotelling.test(x = questioned_data[,1:9], y = suspect_data[,1:9])
+htest
+
 # Hyperparameter Elicitation
 
 p=9
 nw.min = p + 2
-nw_hat = nw.min
 
-a_data = background_data[(background_data$character=='a'),1:p]
-mu_hat=matrix(colMeans(a_data),nrow = 1)
+
+# 
+# function_NR <- function(data,df){
+#   sum_data <- Reduce('+', data)
+#   M = length(data)
+#   V <- sum_data/(df*M)
+#   model_data <- abind(data, along = 3)
+#   lh = sum(dWishart(model_data,df,V,log = T))
+#   return(-lh)
+# }
+# 
+# model_data_list <- list()
+# i=1
+# for (w in unique(background_data$writer_id)){
+#   df_writer = background_data[(background_data$writer_id==w),]
+#   var_data = unname(as.matrix(df_writer[,1:p]))
+#   model_data_list[[i]] = cov(var_data)
+#   i=i+1
+# }
+# 
+# nlm(function_NR,10,data=model_data_list)
+
+nw_hat = 20
+
+a_data = background_data[(background_data$character=='a'),]
+mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
+  colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
 
 S = 0
 for (w in unique(background_data$writer_id)){
@@ -141,7 +188,7 @@ for (w in unique(background_data$writer_id)){
     background_data$character=='a')& (background_data$writer_id==w),]
 
   theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
-  S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+  S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))#*nrow(df_writer)
   S <- S + S.this
 }
 
@@ -172,7 +219,7 @@ for (l_id in 1:l){
       letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
 
       beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-      S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))
+      S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))#*nrow(letter_writer)
       S <- S + S.this
     }
   }
@@ -198,20 +245,16 @@ for (i in 1:dim(beta_cov)[3]) {
   beta_cov_list[[i]] <- beta_cov[, , i]
 }
 
-eta=1
-
-#fit <- fitdistr(all_diagonals, "cauchy")
-#print(fit)
-#hist(rcauchy(1000, location = fit$estimate[1], scale = fit$estimate[2]))
-
-loc <- mean(log(diag(W_hat)))
-sc <- sd(log(diag(W_hat)))
+eta <- 4
 
 
+log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+  df_w <- background_data[background_data$writer_id == w, 1:p]
+  log(apply(df_w, 2, sd))  # log-SD per feature per writer
+}))
 
-
-# Create mapping: letter -> number based on alphabetical order
-
+loc <- mean(log_sds)
+sc  <- sd(log_sds)
 
 
 # Stan data list
@@ -333,4 +376,217 @@ BF_manova_conjugate <- log_lik_H0-log_lik_H1_1-log_lik_H1_2
 print(BF_manova_conjugate)
 print(BF_manova_iw)
 print(BF_manova_lkj)
+
+
+
+
+
+#################################
+#posterior plots
+#################################
+
+fit_H1_1 <- sampling(stan_model__manova_lkj, data = stan_data_H1_1, iter = 2000, chains =1, cores=1)
+
+
+
+post_samples = extract(fit_H1_1)$theta
+
+post_samples = abind::abind(post_samples, extract(fit_H1_1)$beta_raw, along = 3) 
+
+i = 1
+questioned_posterior_list = list()
+for (character in int_characters){
+  questioned_posterior_character = as.data.frame(post_samples[,,alphabet_map[[character]]])
+  questioned_posterior_character['character'] =character
+  names(questioned_posterior_character) = c( "area","a1", "b1", "a2", "b2", "a3","b3", "a4","b4","character")
+  questioned_posterior_list[[i]] = questioned_posterior_character
+  i = i + 1
+}
+
+questioned_posterior <- do.call("rbind", questioned_posterior_list)
+questioned_posterior['Source'] = "Writer 152" 
+
+
+fit_H1_2 <- sampling(stan_model__manova_lkj, data = stan_data_H1_2, iter = 2000, chains = 1, cores=1)
+
+post_samples = extract(fit_H1_2)$theta
+
+post_samples = abind::abind(post_samples, extract(fit_H1_2)$beta_raw, along = 3) 
+
+i = 1
+suspect_posterior_list = list()
+for (character in int_characters){
+  suspect_posterior_character = as.data.frame(post_samples[,,alphabet_map[[character]]])
+  suspect_posterior_character['character'] =character
+  names(suspect_posterior_character) = c("area", "a1", "b1", "a2", "b2", "a3","b3", "a4","b4","character")
+  suspect_posterior_list[[i]] = suspect_posterior_character
+  i = i + 1
+}
+
+suspect_posterior <- do.call("rbind", suspect_posterior_list)
+
+suspect_posterior['Source'] = 'Writer 88'
+
+posterior_data = rbind(questioned_posterior,suspect_posterior)
+
+library(reshape2)
+posterior_data_melt = melt(posterior_data, id = c("character","Source"), 
+                           variable.name = "Coefficient")
+
+posterior_data_melt$Source <- factor(posterior_data_melt$Source, levels = c("Writer 152",'Writer 88'))
+
+#posterior_data_melt_abde = posterior_data_melt[posterior_data_melt$character %in% c('a','b','d','e'),]
+
+library(ggplot2)
+p1 = ggplot(posterior_data_melt, aes(x = value, fill = Source)) + 
+  geom_histogram(aes(y = ..density..),alpha = 0.5, position = "identity")+
+  facet_grid(character~Coefficient,scales="free_y")+ 
+  #labs(title="Posterior distribution of Fourier coefficients") + 
+  theme(strip.text = element_text(size = 20),
+        axis.title=element_blank(),#element_text(size=20,face="bold"),
+        plot.title = element_text(hjust = 0.5,size =20,face="bold"))
+
+p1
+jpeg("Paper_experiments/questioned_suspect_posterior.jpg",width=3920, height=2000, res=300)
+p1
+dev.off()
+
+
+
+post_samples =  extract(fit_H1_1)$theta
+
+
+questioned_posterior_list = list()
+questioned_posterior_character = as.data.frame(post_samples)
+values_a = questioned_posterior_character
+questioned_posterior_character['character'] =int_characters[1]
+names(questioned_posterior_character) = c( "a1", "b1", "a2", "b2", "a3","b3", "a4","b4","character")
+questioned_posterior_list[[1]] = questioned_posterior_character
+
+
+post_samples = abind::abind(post_samples, extract(fit_H1_2)$beta_raw, along = 3) 
+
+i = 2
+for (character in int_characters[-1]){
+  questioned_posterior_character = as.data.frame(post_samples[,,alphabet_map[[character]]])+values_a
+  questioned_posterior_character['character'] =character
+  names(questioned_posterior_character) = c("a1", "b1", "a2", "b2", "a3","b3", "a4","b4","character")
+  questioned_posterior_list[[i]] = questioned_posterior_character
+  i = i + 1
+}
+
+questioned_posterior <- do.call("rbind", questioned_posterior_list)
+questioned_posterior['Source'] = 'Questioned'
+
+
+
+post_samples = extract(fit_H1_2)$theta
+
+suspect_posterior_list = list()
+suspect_posterior_character = as.data.frame(post_samples)
+values_a = suspect_posterior_character
+suspect_posterior_character['character'] =int_characters[1]
+names(suspect_posterior_character) = c( "a1", "b1", "a2","b2", "a3","b3", "a4","b4","character")
+suspect_posterior_list[[1]] = suspect_posterior_character
+
+post_samples = abind::abind(post_samples, extract(fit_H1_2)$beta_raw, along = 3) 
+
+i = 2
+for (character in int_characters[-1]){
+  suspect_posterior_character = as.data.frame(post_samples[,,alphabet_map[[character]]])+values_a
+  suspect_posterior_character['character'] =character
+  names(suspect_posterior_character) = c( "a1", "b1", "a2", "b2", "a3","b3", "a4","b4","character")
+  suspect_posterior_list[[i]] = suspect_posterior_character
+  i = i + 1
+}
+
+
+suspect_posterior <- do.call("rbind", suspect_posterior_list)
+
+suspect_posterior['Source'] = 'Writer 36'#'P.o.i.'#
+
+posterior_data = rbind(questioned_posterior,suspect_posterior)
+
+library(reshape2)
+posterior_data_melt = melt(posterior_data, id = c("character","Source"),
+                           variable.name = "Coefficient")
+
+posterior_data_melt$Source <- factor(posterior_data_melt$Source, levels = c("Questioned","Writer 36"))#'P.o.i.'))#
+
+
+p2 = ggplot(posterior_data_melt, 
+            aes(x = character , y = value, fill = character)) + 
+  geom_boxplot(alpha = 0.5) + 
+  facet_grid(Source~Coefficient, axes = "all", axis.labels = "all") + 
+  #labs(title = "Comparison of Fourier Coefficients by Character") + 
+  theme(strip.text = element_text(size = 20),
+        axis.title = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+        legend.position = "none")
+
+p2
+# jpeg("Stan_code/Plots/character_difference.jpg",width=3920, height=3000, res=300)
+# p2
+# dev.off()
+
+library(gridExtra)
+
+plots <- list()
+
+# Loop through unique combinations of Source and Coefficient
+for(src in unique(posterior_data_melt$Source)) {
+  for(coef in unique(posterior_data_melt$Coefficient)) {
+    # Subset the data
+    subset_data <- subset(posterior_data_melt, Source == src & Coefficient == coef)
+    
+    # Create individual plot
+    p <- ggplot(subset_data, aes(x = character, y = value, fill = character)) + 
+      geom_boxplot(alpha = 0.5) + 
+      ggtitle(paste(src, "\n", coef)) +  # Simplified title
+      theme(strip.text = element_text(size = 20),
+            axis.title = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+            legend.position = "none")
+    
+    # Add plot to list
+    plots[[length(plots) + 1]] <- p
+  }
+}
+
+jpeg("Stan_code/Plots/character_difference_writer_36.jpg",width=5000, height=3000, res=300)
+grid.arrange(grobs = plots, ncol = length(unique(posterior_data_melt$Coefficient)))
+dev.off()
+
+# posterior_data_melt_qop = posterior_data_melt[posterior_data_melt$character %in% c('g','o','p'),]
+# 
+# 
+# p2 = ggplot(posterior_data_melt_qop, aes(x = value, fill = indicator)) + 
+#   geom_histogram(aes(y = ..density..), alpha = 0.5, position = "identity")+
+#   facet_grid(character~Coefficient,scales="free")+ 
+#   labs(title="Posterior distribution of Fourier coefficients parameters \n per character") + 
+#   theme(strip.text = element_text(size = 20),
+#         axis.title=element_text(size=20,face="bold"),
+#         plot.title = element_text(hjust = 0.5,size =20,face="bold"))
+# 
+# p2
+# jpeg("questioned_suspect_posterior_gop.jpg",width=3920, height=2000, res=300)
+# p2
+# dev.off()
+
+
+
+
+p3 = ggplot(posterior_data_melt, aes(x = value, fill = Source)) + 
+  geom_histogram(aes(y = ..density..), alpha = 0.5, position = "identity")+
+  facet_grid(character~Coefficient,scales="free")+ 
+  labs(title="Posterior distribution of Fourier coefficients parameters \n per character") + 
+  theme(strip.text = element_text(size = 20),
+        axis.title=element_text(size=20,face="bold"),
+        plot.title = element_text(hjust = 0.5,size =20,face="bold"))
+
+jpeg("Stan_code/Plots/questioned_suspect_posterior.jpg",width=3920, height=2000, res=300)
+p3
+dev.off()
+
+
 

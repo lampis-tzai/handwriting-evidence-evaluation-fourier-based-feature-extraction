@@ -19,6 +19,7 @@ IAM_data = as.data.frame(IAM_data)
 
 
 IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+IAM_data[,1] = log(IAM_data[,1])
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -36,26 +37,28 @@ count_ch
 table(IAM_data$character)
 
 
+
 background_statistics_niw <- function(background_data){
   
   
   p=9
   nw.min = p + 2
-  nw_hat = nw.min
+  nw_hat = 20
   
-  mu_hat=matrix(colMeans(background_data[,1:p]),nrow = 1)
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
+    colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-    var_data = unname(as.matrix(df_writer[,1:p]))
-    theta_w = matrix(colMeans(var_data), nrow = 1)
-    S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-    S <- S + S.this
-    Cov.this = cov(var_data)*(nrow(df_writer)-1) 
-    Sw <- Sw + Cov.this
+      var_data = unname(as.matrix(df_writer[,1:p]))
+      theta_w = matrix(colMeans(var_data), nrow = 1)
+      S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+      S <- S + S.this
+      Cov.this = cov(var_data)*(nrow(df_writer)-1) 
+      Sw <- Sw + Cov.this
     }
   } 
   
@@ -66,9 +69,17 @@ background_statistics_niw <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
-  eta=1
+  
+  eta <- 4
+  
+  
+  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    log(apply(df_w, 2, sd))  # log-SD per feature per writer
+  }))
+  
+  loc <- mean(log_sds)
+  sc  <- sd(log_sds)
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -78,19 +89,20 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = nw.min
+  nw_hat = 20
   
-  a_data = background_data[(background_data$character==1),1:p]
-  mu_hat=matrix(colMeans(a_data),nrow = 1)
+  a_data = background_data[(background_data$character==1),]
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
+    colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-    theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
-    S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-    S <- S + S.this
+      theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
+      S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+      S <- S + S.this
     }
   }
   
@@ -144,14 +156,19 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
+  eta <- 4
   
-  eta=1
+  
+  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    log(apply(df_w, 2, sd))  # log-SD per feature per writer
+  }))
+  
+  loc <- mean(log_sds)
+  sc  <- sd(log_sds)
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
-
 
 stan_model_niw <- stan_model(file = "Stan_models/niw.stan", model_name = "niw")
 stan_model_nlkj <- stan_model(file = "Stan_models/normal_lkj_model.stan", model_name = "normal_lkj_model")
@@ -179,10 +196,10 @@ different_source_def <- function(character_data,composition,w){
                                                              composition[w,2])),]
   
   
-  for (iter_for_eval in (1)){   
+  for (iter_for_eval in (1:10)){   
     
     
-    sample_size <- min(100, nrow(writer_data_1))
+    sample_size <- min(50, nrow(writer_data_1))
     
     questioned_data <- writer_data_1 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -192,7 +209,7 @@ different_source_def <- function(character_data,composition,w){
         replace = FALSE
       )
     
-    sample_size <- min(100, nrow(writer_data_2))
+    sample_size <- min(50, nrow(writer_data_2))
     suspect_data <- writer_data_2 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
@@ -338,8 +355,8 @@ comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
-#example_df <- different_source_def(IAM_data,comp_writers,259)
-#example_df
+example_df <- different_source_def(IAM_data,comp_writers,259)
+example_df
 
 cl <- makeCluster(5,
                   outfile="C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")

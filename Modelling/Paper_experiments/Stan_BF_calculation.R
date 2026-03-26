@@ -29,7 +29,7 @@ marginal_likelihood_niw_conjugate<- function(stan_data){
   w_data = stan_data$y
   m0 = matrix(stan_data$mu,nrow = 1, byrow = TRUE)
   v0 = stan_data$nu
-  k0 = 0.35
+  k0 = 0.5
   U0 = stan_data$U
   n = nrow(w_data)
   d = ncol(w_data)

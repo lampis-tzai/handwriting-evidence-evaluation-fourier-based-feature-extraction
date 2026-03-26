@@ -37,14 +37,18 @@ count_ch
 
 table(IAM_data$character)
 
+
+
+
 background_statistics_niw <- function(background_data){
   
   
   p=9
   nw.min = p + 2
-  nw_hat = nw.min
+  nw_hat = 20
   
-  mu_hat=matrix(colMeans(background_data[,1:p]),nrow = 1)
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
+    colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   Sw = 0
@@ -67,9 +71,17 @@ background_statistics_niw <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
-  eta=1
+  
+  eta <- 4
+  
+  
+  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    log(apply(df_w, 2, sd))  # log-SD per feature per writer
+  }))
+  
+  loc <- mean(log_sds)
+  sc  <- sd(log_sds)
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -79,10 +91,11 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = nw.min
+  nw_hat = 20
   
-  a_data = background_data[(background_data$character==1),1:p]
-  mu_hat=matrix(colMeans(a_data),nrow = 1)
+  a_data = background_data[(background_data$character==1),]
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
+    colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   for (w in unique(background_data$writer_id)){
@@ -145,10 +158,16 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
+  eta <- 4
   
-  eta=1
+  
+  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    log(apply(df_w, 2, sd))  # log-SD per feature per writer
+  }))
+  
+  loc <- mean(log_sds)
+  sc  <- sd(log_sds)
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
@@ -174,9 +193,9 @@ same_source_def <- function(character_data,w, char_probs){
   writer_data_all <- character_data[(character_data$writer_id==w),]
   background_data_all <- character_data[(character_data$writer_id!=w),]
   
-  for (iter_for_eval in (1:3)){
+  for (iter_for_eval in (1:10)){
     
-    sample_size <- min(200, nrow(writer_data_all))
+    sample_size <- min(100, nrow(writer_data_all))
     
     writer_data <- writer_data_all %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -186,8 +205,8 @@ same_source_def <- function(character_data,w, char_probs){
         replace = FALSE
       )
     
-    questioned_data <- writer_data[1:100,]
-    suspect_data <- writer_data[101:200,]
+    questioned_data <- writer_data[1:floor(sample_size/2),]
+    suspect_data <- writer_data[(floor(sample_size/2)+1):sample_size,]
     
     # intersect characters
     #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))

@@ -12,6 +12,7 @@ IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -22,7 +23,7 @@ writers_ids <- unique(IAM_data$writer_id)
 writer_data_all = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
 background_data = IAM_data[(IAM_data$writer_id!=writers_ids[1]),]
 
-sample_size <- min(200, nrow(writer_data_all))
+sample_size <- min(100, nrow(writer_data_all))
 
 writer_data <- writer_data_all %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -32,8 +33,8 @@ writer_data <- writer_data_all %>%
     replace = FALSE
   )
 
-questioned_data <- writer_data[1:100,]
-suspect_data <- writer_data[101:200,]
+questioned_data <- writer_data[1:50,]
+suspect_data <- writer_data[51:100,]
 
 # intersect characters
 #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
@@ -64,7 +65,7 @@ writer_data_2 <- IAM_data[IAM_data$writer_id == "152", ]
 
 background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "152")), ]
 
-sample_size <- min(100, nrow(writer_data_1))
+sample_size <- min(50, nrow(writer_data_1))
 
 questioned_data <- writer_data_1 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -74,7 +75,7 @@ questioned_data <- writer_data_1 %>%
     replace = FALSE
   )
 
-sample_size <- min(100, nrow(writer_data_2))
+sample_size <- min(50, nrow(writer_data_2))
 suspect_data <- writer_data_2 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
   slice_sample(
@@ -122,14 +123,41 @@ table(suspect_data$character)
 
 writer_data = rbind(suspect_data,questioned_data)
 
+library(Hotelling)
+htest<- hotelling.test(x = questioned_data[,1:9], y = suspect_data[,1:9])
+htest
 
 # Hyperparameter Elicitation
 
 p=9
 nw.min = p + 2
-nw_hat = nw.min
 
-mu_hat=matrix(colMeans(background_data[,1:p]),nrow = 1)
+
+# 
+# function_NR <- function(data,df){
+#   sum_data <- Reduce('+', data)
+#   M = length(data)
+#   V <- sum_data/(df*M)
+#   model_data <- abind(data, along = 3)
+#   lh = sum(dWishart(model_data,df,V,log = T))
+#   return(-lh)
+# }
+# 
+# model_data_list <- list()
+# i=1
+# for (w in unique(background_data$writer_id)){
+#   df_writer = background_data[(background_data$writer_id==w),]
+#   var_data = unname(as.matrix(df_writer[,1:p]))
+#   model_data_list[[i]] = cov(var_data)
+#   i=i+1
+# }
+# 
+# nlm(function_NR,10,data=model_data_list)
+
+nw_hat = 25
+
+mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
+       colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
 
 S = 0
 Sw = 0
@@ -151,14 +179,16 @@ if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
 W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
 U_hat <- W_hat*(nw_hat-p-1)
 
-eta=1
+eta <- 4
 
-#fit <- fitdistr(diag(W_hat), "cauchy")
-#print(fit)
-#hist(rcauchy(1000, location = fit$estimate[1], scale = fit$estimate[2]))
 
-loc <- mean(log(diag(W_hat)))
-sc <- sd(log(diag(W_hat))) # biased estimation: (sum((log(diag(W_hat))-loc)^2)/p)^(1/2)
+log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+  df_w <- background_data[background_data$writer_id == w, 1:p]
+  log(apply(df_w, 2, sd))  # log-SD per feature per writer
+}))
+
+loc <- mean(log_sds)
+sc  <- sd(log_sds)
 
 # Stan data list
 stan_data_H0 <- list(N = nrow(writer_data), 
@@ -206,9 +236,9 @@ stan_model_niw <- stan_model(file = "Stan_models/niw.stan", model_name = "niw")
 stan_model_nlkj <- stan_model(file = "Stan_models/normal_lkj_model.stan", model_name = "normal_lkj_model")
 
 assess_BF <- function(stan_model,stan_data_H0,stan_data_H1_1,stan_data_H1_2){
-  fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains = 2, cores=2)
-  fit_H1_1 <- sampling(stan_model, data = stan_data_H1_1, iter = 2000, chains = 2, cores=2)
-  fit_H1_2 <- sampling(stan_model, data = stan_data_H1_2, iter = 2000, chains = 2, cores=2)
+  fit_H0 <- sampling(stan_model, data = stan_data_H0, iter = 2000, chains =1, cores=1)
+  fit_H1_1 <- sampling(stan_model, data = stan_data_H1_1, iter = 2000, chains = 1, cores=1)
+  fit_H1_2 <- sampling(stan_model, data = stan_data_H1_2, iter = 2000, chains = 1, cores=1)
   
   samples_H0 <- extract(fit_H0)
   samples_H1_1 <- extract(fit_H1_1)
@@ -261,3 +291,4 @@ BF_niw_conjugate <- log_lik_H0-log_lik_H1_1-log_lik_H1_2
 print(BF_niw_conjugate)
 print(BF_niw)
 print(BF_nlkj)
+

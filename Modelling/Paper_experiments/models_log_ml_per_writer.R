@@ -18,8 +18,9 @@ set.seed(2)
 db <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 db = as.data.frame(db)
 
-db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
 
+db[,2:9] = db[,2:9]/sqrt(db$area)
+db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
 
 background_statistics_niw <- function(background_data){
   
@@ -34,7 +35,7 @@ background_statistics_niw <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       var_data = unname(as.matrix(df_writer[,1:p]))
       theta_w = matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
@@ -72,7 +73,7 @@ background_statistics_br <- function(background_data){
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
@@ -89,7 +90,7 @@ background_statistics_br <- function(background_data){
   for (l_id in 1:l){
     letter_data = as.matrix(unname(background_data[(
       background_data$character==l_id),1:p]))
-    if (nrow(letter_data)>3){
+    if (nrow(letter_data)>2){
       letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
       beta_l = colMeans(letter_diff)
       beta_mu[l_id,] = beta_l
@@ -97,7 +98,7 @@ background_statistics_br <- function(background_data){
       for (w in unique(background_data$writer_id)){
         letter_writer = background_data[(
           background_data$character==l_id)& (background_data$writer_id==w),1:p]
-        if (nrow(letter_writer)>3){
+        if (nrow(letter_writer)>2){
           a_data_writer = background_data[(
             background_data$character==1)& (background_data$writer_id==w),1:p]
           
@@ -121,7 +122,7 @@ background_statistics_br <- function(background_data){
   Sw = 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
-    if (nrow(df_writer)>3){
+    if (nrow(df_writer)>2){
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
@@ -136,6 +137,7 @@ background_statistics_br <- function(background_data){
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
+
 
 
 
