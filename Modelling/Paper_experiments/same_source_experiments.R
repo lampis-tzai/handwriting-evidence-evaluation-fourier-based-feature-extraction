@@ -45,7 +45,7 @@ background_statistics_niw <- function(background_data){
   
   p=9
   nw.min = p + 2
-  nw_hat = 20
+  nw_hat = 27
   
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -72,7 +72,7 @@ background_statistics_niw <- function(background_data){
   U_hat <- W_hat*(nw_hat-p-1)
   
   
-  eta <- 4
+  eta <- 9
   
   
   log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
@@ -91,7 +91,7 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = 20
+  nw_hat = 27
   
   a_data = background_data[(background_data$character==1),]
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
@@ -158,7 +158,7 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  eta <- 4
+  eta <- 9
   
   
   log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
@@ -193,9 +193,9 @@ same_source_def <- function(character_data,w){
   writer_data_all <- character_data[(character_data$writer_id==w),]
   background_data <- character_data[(character_data$writer_id!=w),]
   
-  for (iter_for_eval in (1:10)){
+  for (iter_for_eval in (1:100)){
     
-    sample_size <- min(100, nrow(writer_data_all))
+    sample_size <- nrow(writer_data_all)#min(100, nrow(writer_data_all))
     
     writer_data <- writer_data_all %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -360,7 +360,8 @@ clusterExport(cl,
                    "read_excel","write_xlsx"),
               envir=globalenv())
 
-w.list <- sapply(unique(IAM_data$writer_id), list)
+#w.list <- sapply(unique(IAM_data$writer_id), list)
+w.list <- list("110","109","114","89","315","92","94","113","16","61")
 
 system.time({saves = parLapply(cl, w.list,
                                same_source_def,
@@ -370,14 +371,17 @@ stopCluster(cl)
 
 df_all <- do.call("rbind", saves)
 
-write_xlsx(df_all,"Paper_experiments/same_source_results_ls.xlsx")
+write_xlsx(df_all,"Paper_experiments/same_source_results_all.xlsx")
 
 
-ssr <- read_excel("Paper_experiments/same_source_results.xlsx")
+ssr <- read_excel("Paper_experiments/same_source_results_smallest_BF.xlsx")
 
-ssr[(ssr$model=='manova_lkj') & (ssr$BF<0),]
+#manova_lkj<- ssr[(ssr$model=='manova_lkj'),]
+#manova_lkj[order(manova_lkj$BF),][1:10,1]
+#"110" "109" "114" "89"  "315" "92"  "94"  "113" "16"  "61"
+
 ssr = as.data.frame(ssr)
-
+unique(ssr$writer)
 
 indx <- apply(ssr, 2, function(x) any(is.na(x) | is.infinite(x)))
 colnames(ssr)[indx]
@@ -386,93 +390,63 @@ ssr[is.na(ssr)] = 0
 
 ssr_binary = ssr
 mean(ssr_binary$BF<0)
-as.data.frame(ssr %>% group_by(model, character) %>% summarise(FP = mean(BF<0)))
+as.data.frame(ssr %>% group_by(model, character) %>% summarise(FN = mean(BF<0)))
 
 
+#plot
 
+ssr$Prior_approach <- ifelse((ssr$model=="niw_conjugate" | ssr$model=="manova_conjugate"),"(1) NIW Conjugate",
+                             ifelse((ssr$model=="niw" | ssr$model=="manova_iw"), "(2) NIW Hierarchical", 
+                                    "(3) Normal-LogNormal-LKJ"))
 
-colnames(ssr) = c("writer", "a_questioned_per", "d_questioned_per",
-                  "o_questioned_per", "q_questioned_per",
-                  "Normal-conjugate_a",
-                  "Normal-inverse-Wishart_a",
-                  "Normal-LN-LKJ_a",
-                  "Normal-conjugate_d",
-                  "Normal-inverse-Wishart_d",
-                  "Normal-LN-LKJ_d",
-                  "Normal-conjugate_o",
-                  "Normal-inverse-Wishart_o",
-                  "Normal-LN-LKJ_o",
-                  "Normal-conjugate_q",
-                  "Normal-inverse-Wishart_q",
-                  "Normal-LN-LKJ_q",
-                  "Normal-conjugate_all",
-                  "Normal-inverse-Wishart_all",
-                  "Normal-LN-LKJ_all",
-                  "MANOVA-conjugate",
-                  "MANOVA-inverse-Wishart",
-                  "MANOVA-LN-LKJ")
-
-
-library(reshape2)
-melt_ssr_df <- melt(ssr, id = c("writer","a_questioned_per",
-                                "d_questioned_per","o_questioned_per",
-                                "q_questioned_per"), 
-                    variable.name = 'model') 
-
+ssr$Prior_approach <- factor(ssr$Prior_approach, 
+                             levels =c("(1) NIW Conjugate",
+                                       "(2) NIW Hierarchical",
+                                       "(3) Normal-LogNormal-LKJ"))
 
 library(stringr)
-split_data = str_split_fixed(melt_ssr_df$model, "-", 2)
-split_data2 = str_split_fixed(split_data[,2],"_",2)
-melt_ssr_df$model = paste0(split_data[,1],'_',split_data2[,2])
-melt_ssr_df['Prior_approach'] = split_data2[,1]
+split_data = str_split_fixed(ssr$model, "_", 2)
+ssr$model = split_data[,1]
+
+ssr$model <- ifelse(ssr$model=='manova',"MANOVA","Normal") 
+
+ssr$model <- paste0(ssr$model, ' ', ssr$character)
+unique(ssr$model)
+
+ssr$model <- factor(ssr$model, levels =c("Normal a", "Normal b", "Normal d", "Normal e",
+                                         "Normal g", "Normal o", "Normal p", "Normal all", 
+                                         "MANOVA all"))
+
+
+
+ssr$BF = as.numeric(ssr$BF)
 
 library(ggplot2)
-
-melt_ssr_df$Prior_approach <- factor(melt_ssr_df$Prior_approach, 
-                                     levels = unique(melt_ssr_df$Prior_approach))
-
-
-
-
-melt_ssr_df$model <- factor(melt_ssr_df$model, 
-                            levels = c("Normal_a",
-                                       "Normal_d",
-                                       "Normal_o",
-                                       "Normal_q",
-                                       "Normal_all",
-                                       "MANOVA_"))
-
-levels(melt_ssr_df$model) <- c("Normal a","Normal d","Normal o","Normal q",
-                               "Normal all", "MANOVA")
-
-
-levels(melt_ssr_df$Prior_approach) <- c("(1) NIW Conjugate",
-                                        "(2) NIW Hierarchical",
-                                        "(3) Normal-LogNormal-LKJ")
-
-melt_ssr_df$value = as.numeric(melt_ssr_df$value)
-
 library(latex2exp)
-plot = ggplot(melt_ssr_df,
-              aes(x = Prior_approach, y = value, fill = Prior_approach)) +
+plot = ggplot(ssr,
+              aes(x = Prior_approach, y = BF, fill = Prior_approach)) +
   geom_boxplot() +
-  facet_wrap(~model,ncol = 6) +
-  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-10, 200)) +
+  facet_wrap(~model,ncol = 9) +
+  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-50, 200)) +
   scale_x_discrete(labels = c("(1)","(2)","(3)"), name = "Models")+
   #labs(title="Logarithmic Bayes Factors for \n Different Source Comparisons") + 
   #theme(plot.title = element_text(hjust = 0.5))+
   scale_fill_brewer(palette="Set2")+
   geom_hline(yintercept = 0, color = 'brown',lty='dashed')+ 
   labs(fill = "Prior approach") +
-  theme(#plot.title = element_text(hjust = 0.5),
-    #legend.spacing.y = unit(0.5, 'cm'),
-    strip.text = element_text(size = 12,face="bold"),
-    axis.title=element_text(size=11,face="bold"),
-    legend.text = element_text(size=10),
-    legend.title = element_text(size=15,face="bold"))+
-  guides(fill = guide_legend(byrow = TRUE),
-         colour = guide_legend(override.aes = list(size=5)))
+  theme(
+    #plot.title = element_text(hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 15, face = "bold"),
+    legend.position = "bottom"
+  ) +
+  guides(
+    fill = guide_legend(byrow = TRUE),
+    colour = guide_legend(override.aes = list(size = 5))
+  )
 
-jpeg("Stan_code/plots/ss_boxplot.jpg",width=3920, height=2000, res=300)
+#jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
 plot
-dev.off()
+#dev.off()
