@@ -1,4 +1,4 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -43,7 +43,7 @@ background_statistics_niw <- function(background_data){
   
   p=9
   nw.min = p + 2
-  nw_hat = 20
+  nw_hat = 27
   
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -70,13 +70,21 @@ background_statistics_niw <- function(background_data){
   U_hat <- W_hat*(nw_hat-p-1)
   
   
-  eta <- 4
+  eta <- 9
   
   
-  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
-    df_w <- background_data[background_data$writer_id == w, 1:p]
-    log(apply(df_w, 2, sd))  # log-SD per feature per writer
-  }))
+  log_sds <- do.call(
+    c,
+    lapply(unique(background_data$writer_id), function(w) {
+      df_w <- background_data[background_data$writer_id == w, 1:p]
+      
+      if (nrow(df_w) < 3) {
+        return(NULL)  # skip this writer
+      }
+      
+      log(apply(df_w, 2, sd))  # log-SD per feature per writer
+    })
+  )
   
   loc <- mean(log_sds)
   sc  <- sd(log_sds)
@@ -89,7 +97,7 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = 20
+  nw_hat = 27
   
   a_data = background_data[(background_data$character==1),]
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
@@ -156,13 +164,21 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  eta <- 4
+  eta <- 9
   
   
-  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
-    df_w <- background_data[background_data$writer_id == w, 1:p]
-    log(apply(df_w, 2, sd))  # log-SD per feature per writer
-  }))
+  log_sds <- do.call(
+    c,
+    lapply(unique(background_data$writer_id), function(w) {
+      df_w <- background_data[background_data$writer_id == w, 1:p]
+      
+      if (nrow(df_w) < 3) {
+        return(NULL)  # skip this writer
+      }
+      
+      log(apply(df_w, 2, sd))  # log-SD per feature per writer
+    })
+  )
   
   loc <- mean(log_sds)
   sc  <- sd(log_sds)
@@ -196,10 +212,10 @@ different_source_def <- function(character_data,composition,w){
                                                              composition[w,2])),]
   
   
-  for (iter_for_eval in (1:10)){   
+  for (iter_for_eval in (1:1)){   
     
     
-    sample_size <- min(50, nrow(writer_data_1))
+    sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
     
     questioned_data <- writer_data_1 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -209,7 +225,7 @@ different_source_def <- function(character_data,composition,w){
         replace = FALSE
       )
     
-    sample_size <- min(50, nrow(writer_data_2))
+    sample_size <- floor(nrow(writer_data_2)/2)#min(50, nrow(writer_data_2))
     suspect_data <- writer_data_2 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
@@ -355,11 +371,11 @@ comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
-example_df <- different_source_def(IAM_data,comp_writers,259)
-example_df
+#example_df <- different_source_def(IAM_data,comp_writers, sample(w.list,1)[[1]])
+#example_df
 
 cl <- makeCluster(5,
-                  outfile="C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
+                  outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
 
 clusterEvalQ(cl, {
   library(dplyr)
@@ -378,7 +394,7 @@ clusterExport(cl,
                    "read_excel","write_xlsx"),
               envir=globalenv())
 
-system.time({saves = parLapply(cl, w.list,
+system.time({saves = parLapply(cl, sample(w.list),
                                different_source_def,
                                character_data = IAM_data,
                                composition = comp_writers)})
@@ -390,12 +406,11 @@ df_all <- do.call("rbind", saves)
 write_xlsx(df_all,"Paper_experiments/different_source_results.xlsx")
 
 
-dsr <- read_excel("Paper_experiments/different_source_results_iter.xlsx")
-
+dsr <- read_excel("Paper_experiments/different_source_results.xlsx")
 
 dsr = as.data.frame(dsr)
 
-dsr[(dsr$model=='manova_lkj') & (dsr$BF>0),]
+dsr[(dsr$model=='niw') & (dsr$character=='all') & (dsr$BF>0),]
 
 
 indx <- apply(dsr, 2, function(x) any(is.na(x) | is.infinite(x)))
@@ -408,92 +423,61 @@ mean(dsr_binary$BF>0)
 as.data.frame(dsr %>% group_by(model, character) %>% summarise(FP = mean(BF>0)))
 
 
+#plot
 
-colnames(dsr) = c("writer_1","writer_2", "a_questioned_per", "d_questioned_per",
-                  "o_questioned_per", "q_questioned_per",
-                  "Normal-conjugate_a",
-                  "Normal-inverse-Wishart_a",
-                  "Normal-LN-LKJ_a",
-                  "Normal-conjugate_d",
-                  "Normal-inverse-Wishart_d",
-                  "Normal-LN-LKJ_d",
-                  "Normal-conjugate_o",
-                  "Normal-inverse-Wishart_o",
-                  "Normal-LN-LKJ_o",
-                  "Normal-conjugate_q",
-                  "Normal-inverse-Wishart_q",
-                  "Normal-LN-LKJ_q",
-                  "Normal-conjugate_all",
-                  "Normal-inverse-Wishart_all",
-                  "Normal-LN-LKJ_all",
-                  "MANOVA-conjugate",
-                  "MANOVA-inverse-Wishart",
-                  "MANOVA-LN-LKJ")
+dsr$Prior_approach <- ifelse((dsr$model=="niw_conjugate" | dsr$model=="manova_conjugate"),"(1) NIW Conjugate",
+                             ifelse((dsr$model=="niw" | dsr$model=="manova_iw"), "(2) NIW Hierarchical", 
+                                    "(3) Normal-LogNormal-LKJ"))
 
-
-library(reshape2)
-melt_dsr_df <- melt(dsr, id = c("writer_1","writer_2","a_questioned_per",
-                                "d_questioned_per","o_questioned_per",
-                                "q_questioned_per"), 
-                    variable.name = 'model') 
-
-
+dsr$Prior_approach <- factor(dsr$Prior_approach, 
+                             levels =c("(1) NIW Conjugate",
+                                       "(2) NIW Hierarchical",
+                                       "(3) Normal-LogNormal-LKJ"))
 
 library(stringr)
-split_data = str_split_fixed(melt_dsr_df$model, "-", 2)
-split_data2 = str_split_fixed(split_data[,2],"_",2)
-melt_dsr_df$model = paste0(split_data[,1],'_',split_data2[,2])
-melt_dsr_df['Prior_approach'] = split_data2[,1]
+split_data = str_split_fixed(dsr$model, "_", 2)
+dsr$model = split_data[,1]
+
+dsr$model <- ifelse(dsr$model=='manova',"MANOVA","Normal") 
+
+dsr$model <- paste0(dsr$model, ' ', dsr$character)
+unique(dsr$model)
+
+dsr$model <- factor(dsr$model, levels =c("Normal a", "Normal b", "Normal d", "Normal e",
+                                         "Normal g", "Normal o", "Normal p", "Normal all", 
+                                         "MANOVA all"))
+
+
+
+dsr$BF = as.numeric(dsr$BF)
 
 library(ggplot2)
-
-melt_dsr_df$Prior_approach <- factor(melt_dsr_df$Prior_approach, 
-                                  levels = unique(melt_dsr_df$Prior_approach))
-
-
-
-
-melt_dsr_df$model <- factor(melt_dsr_df$model, 
-                            levels = c("Normal_a",
-                                       "Normal_d",
-                                       "Normal_o",
-                                       "Normal_q",
-                                       "Normal_all",
-                                       "MANOVA_"))
-
-levels(melt_dsr_df$model) <- c("Normal a","Normal d","Normal o","Normal q",
-                              "Normal all", "MANOVA")
-
-
-levels(melt_dsr_df$Prior_approach) <- c("(1) NIW Conjugate",
-                                        "(2) NIW Hierarchical",
-                                        "(3) Normal-LogNormal-LKJ")
-
-melt_dsr_df$value = as.numeric(melt_dsr_df$value)
-
 library(latex2exp)
-plot = ggplot(melt_dsr_df,
-              aes(x = Prior_approach, y = value, fill = Prior_approach)) +
+plot = ggplot(dsr,
+              aes(x = Prior_approach, y = BF, fill = Prior_approach)) +
   geom_boxplot() +
-  facet_wrap(~model,ncol = 6) +
-  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-700, 100)) +
+  facet_wrap(~model,ncol = 9) +
+  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-300, 50)) +
   scale_x_discrete(labels = c("(1)","(2)","(3)"), name = "Models")+
   #labs(title="Logarithmic Bayes Factors for \n Different Source Comparisons") + 
   #theme(plot.title = element_text(hjust = 0.5))+
   scale_fill_brewer(palette="Set2")+
   geom_hline(yintercept = 0, color = 'brown',lty='dashed')+ 
   labs(fill = "Prior approach") +
-  theme(#plot.title = element_text(hjust = 0.5),
-    #legend.spacing.y = unit(0.5, 'cm'),
-    strip.text = element_text(size = 12,face="bold"),
-    axis.title=element_text(size=11,face="bold"),
-    legend.text = element_text(size=10),
-    #legend.title=element_blank())+
-  legend.title = element_text(size=15,face="bold"))+
-  guides(fill = guide_legend(byrow = TRUE),
-         colour = guide_legend(override.aes = list(size=5)))
+  theme(
+    #plot.title = element_text(hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 15, face = "bold"),
+    legend.position = "bottom"
+  ) +
+  guides(
+    fill = guide_legend(byrow = TRUE),
+    colour = guide_legend(override.aes = list(size = 5))
+  )
 
-jpeg("Stan_code/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
+jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
 plot
 dev.off()
 
