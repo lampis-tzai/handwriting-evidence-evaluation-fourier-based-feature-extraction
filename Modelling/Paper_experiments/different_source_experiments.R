@@ -86,8 +86,8 @@ background_statistics_niw <- function(background_data){
     })
   )
   
-  loc <- mean(log_sds)
-  sc  <- sd(log_sds)
+  loc <- mean(log_sds, na.rm=T)
+  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -180,8 +180,8 @@ background_statistics_br <- function(background_data){
     })
   )
   
-  loc <- mean(log_sds)
-  sc  <- sd(log_sds)
+  loc <- mean(log_sds, na.rm=T)
+  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
