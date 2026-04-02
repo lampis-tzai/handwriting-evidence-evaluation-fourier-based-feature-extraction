@@ -17,11 +17,11 @@ source('Paper_experiments/Stan_BF_calculation.R')
 set.seed(2)
 
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -80,8 +80,8 @@ background_statistics_niw <- function(background_data){
     log(apply(df_w, 2, sd))  # log-SD per feature per writer
   }))
   
-  loc <- mean(log_sds)
-  sc  <- sd(log_sds)
+  loc <- mean(log_sds, na.rm=T)
+  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -166,8 +166,8 @@ background_statistics_br <- function(background_data){
     log(apply(df_w, 2, sd))  # log-SD per feature per writer
   }))
   
-  loc <- mean(log_sds)
-  sc  <- sd(log_sds)
+  loc <- mean(log_sds, na.rm=T)
+  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
@@ -183,7 +183,7 @@ stan_model_manova_lkj <- stan_model(file = "Stan_models/MANOVA_lkj_model.stan", 
 write_xlsx(data.frame(),"Paper_experiments/same_source_results_iter.xlsx")
 
 
-same_source_def <- function(character_data,w, char_probs){
+same_source_def <- function(character_data,w){
   
   all_chars <- sort(unique(character_data$character))
   l <- length(all_chars)
@@ -191,7 +191,7 @@ same_source_def <- function(character_data,w, char_probs){
   df_all<-data.frame()
   
   writer_data_all <- character_data[(character_data$writer_id==w),]
-  background_data_all <- character_data[(character_data$writer_id!=w),]
+  background_data <- character_data[(character_data$writer_id!=w),]
   
   for (iter_for_eval in (1:10)){
     
@@ -233,7 +233,7 @@ same_source_def <- function(character_data,w, char_probs){
     
     background_data$character <- as.numeric(alphabet_map[background_data$character])
     
-    chars <- unique(writer_data$character)
+    chars <- unique(background_data$character)
     bf_rows <- vector("list", length(chars))
     
     i <- 1
@@ -244,8 +244,8 @@ same_source_def <- function(character_data,w, char_probs){
       if ((nrow(questioned_data_ch)>1) & (nrow(suspect_data_ch)>1)){
         
         background_stats_niw_ch <- background_statistics_niw(
-          background_data[background_data$character == ch, ]
-        )
+          background_data[background_data$character == ch, ])
+        
         niw_conjugate_ch <- niw_conjugate(
           questioned_data_ch,
           suspect_data_ch,
@@ -336,7 +336,8 @@ same_source_def <- function(character_data,w, char_probs){
   return(df_all)
 }
 
-#same_source_def(IAM_data,'85',char_probs)
+#df_resutls<- same_source_def(IAM_data,'85')
+#df_resutls
 
 detectCores()
 cl <- makeCluster(5,
@@ -363,20 +364,18 @@ w.list <- sapply(unique(IAM_data$writer_id), list)
 
 system.time({saves = parLapply(cl, w.list,
                                same_source_def,
-                               character_data = IAM_data,
-                               char_probs = char_probs)})
+                               character_data = IAM_data)})
 
 stopCluster(cl)
 
 df_all <- do.call("rbind", saves)
 
-write_xlsx(df_all,"Paper_experiments/same_source_results.xlsx")
+write_xlsx(df_all,"Paper_experiments/same_source_results_ls.xlsx")
 
 
-ssr <- read_excel("Paper_experiments/Experimental_data/same_source_results.xlsx")
+ssr <- read_excel("Paper_experiments/same_source_results.xlsx")
 
-
-
+ssr[(ssr$model=='manova_lkj') & (ssr$BF<0),]
 ssr = as.data.frame(ssr)
 
 
@@ -386,18 +385,10 @@ ssr[sapply(ssr, is.infinite)] <- NA
 ssr[is.na(ssr)] = 0
 
 ssr_binary = ssr
-ssr_binary[,6:ncol(ssr_binary)] = ssr_binary[,6:ncol(ssr_binary)]<0
+mean(ssr_binary$BF<0)
+as.data.frame(ssr %>% group_by(model, character) %>% summarise(FP = mean(BF<0)))
 
-View(as.data.frame(colSums(ssr_binary[,6:ncol(ssr_binary)])))
 
-View(round(as.data.frame(colMeans(ssr_binary[,6:ncol(ssr_binary)])),3))
-
-ssr_grouped = ssr_binary %>%
-  group_by(writer) %>%
-  summarise_all("mean")
-
-ssr_grouped = as.data.frame(ssr_grouped)
-View(ssr_grouped)
 
 
 colnames(ssr) = c("writer", "a_questioned_per", "d_questioned_per",
