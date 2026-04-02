@@ -8,7 +8,7 @@ library(CholWishart)
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
@@ -59,13 +59,13 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "118", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "152", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "62", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "152")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("118", "62")), ]
 
-sample_size <- min(50, nrow(writer_data_1))
+sample_size <-  floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
 
 questioned_data <- writer_data_1 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -75,7 +75,7 @@ questioned_data <- writer_data_1 %>%
     replace = FALSE
   )
 
-sample_size <- min(50, nrow(writer_data_2))
+sample_size <-  floor(nrow(writer_data_2)/2)#min(50, nrow(writer_data_2))
 suspect_data <- writer_data_2 %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
   slice_sample(
@@ -154,7 +154,7 @@ nw.min = p + 2
 # 
 # nlm(function_NR,10,data=model_data_list)
 
-nw_hat = 25
+nw_hat = 27
 
 mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
        colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -179,16 +179,71 @@ if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
 W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
 U_hat <- W_hat*(nw_hat-p-1)
 
-eta <- 4
+
+sd_w <- sqrt(diag(W_hat))
+loc <- mean(log(sd_w))
+sc <- sd(log(sd_w))
+# sc <- mean(apply(              
+#   sapply(unique(background_data$writer_id), function(w) {
+#     df_w <- background_data[background_data$writer_id == w, 1:p]
+#     sqrt(diag(cov(as.matrix(df_w))))
+#   }), 1, function(x) sd(log(x))))
 
 
-log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
-  df_w <- background_data[background_data$writer_id == w, 1:p]
-  log(apply(df_w, 2, sd))  # log-SD per feature per writer
-}))
+# log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+#   df_w <- background_data[background_data$writer_id == w, 1:p]
+#   log(apply(df_w, 2, sd))  # log-SD per feature per writer
+# }))
 
-loc <- mean(log_sds)
-sc  <- sd(log_sds)
+# log_sds<-log(apply(background_data[,1:p],2,sd))
+# 
+# loc <- mean(log_sds)
+# sc  <- sd(log_sds)
+
+
+# per writer covariance and correlation matrices
+# writers <- unique(background_data$writer_id)
+# Rs <- lapply(writers, function(w) {
+#   df_w <- as.matrix(background_data[background_data$writer_id == w, 1:p])
+#   S_w <- cov(df_w)
+#   D_half <- diag(1 / sqrt(diag(S_w)))
+#   R_w <- D_half %*% S_w %*% D_half
+#   R_w
+# })
+# 
+# logdet_R <- vapply(Rs, function(R) determinant(R, logarithm = TRUE)$modulus, numeric(1))
+# 
+# # log normalizing constant for LKJ_K(eta)
+# logZ_lkj <- function(eta, K) {
+#   # Using Lewandowski–Kurowicka–Joe form: product of Beta functions
+#   # See e.g. Stan / TFP implementation for exact formula
+#   # Skeleton (you need to fill-in carefully from a reference):
+#   s <- 0
+#   for (i in 1:(K - 1)) {
+#     a <- 0.5 * (K - i + 1)
+#     b <- eta + 0.5 * (K - i - 1)
+#     s <- s + lbeta(a, b)
+#   }
+#   -s
+# }
+# 
+# loglik_eta <- function(eta, logdet_R, K) {
+#   if (eta <= 0) return(-Inf)
+#   M <- length(logdet_R)
+#   (eta - 1) * sum(logdet_R) + M * logZ_lkj(eta, K)
+# }
+# 
+# # Maximize numerically (e.g. nlm or optim with 1D search)
+# eta_hat <- optimize(
+#   f = function(e) -loglik_eta(e, logdet_R, K = p),
+#   interval = c(1e-3, 100),
+#   maximum = FALSE
+# )$minimum
+# eta_hat
+# 9.8
+eta <- 9
+
+
 
 # Stan data list
 stan_data_H0 <- list(N = nrow(writer_data), 

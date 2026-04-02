@@ -9,8 +9,8 @@ matrix[L,P] beta_mu; // prior means for beta
 cov_matrix[P] beta_cov[L]; // prior covariances for beta
 int<lower=1, upper=L> letters[N]; // categorical predictor
 matrix[N, P] y; // observed data
-real loc;  // location cauchy
-real sc;  // scale cauchy
+real loc;   // 
+real sc;    // 
 real eta;  // eta lkj
 }
 
