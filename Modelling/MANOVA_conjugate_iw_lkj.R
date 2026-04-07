@@ -81,11 +81,11 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "118", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "92", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "62", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "88", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("118", "62")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("92", "88")), ]
 
 sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
 
@@ -106,11 +106,7 @@ suspect_data <- writer_data_2 %>%
     replace = FALSE
   )
 
-# questioned_data_old = questioned_data
-# suspect_data_old = suspect_data
 
-# questioned_data = questioned_data_old
-# suspect_data = suspect_data_old
 
 int_characters <- sort(unique(IAM_data$character))
 l <- length(int_characters)
@@ -119,7 +115,7 @@ questioned_data$character <- factor(questioned_data$character, levels = int_char
 suspect_data$character <- factor(suspect_data$character, levels = int_characters)
 
 alphabet_map <- setNames(seq_along(int_characters), int_characters)
-
+# 
 # int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
 # 
 # l <- length(int_characters)
@@ -129,15 +125,15 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 # 
 # questioned_data$character <- ifelse(questioned_data$character %in% int_characters,
 #                                    questioned_data$character,
-#                                    'o')
+#                                    'a')
 # 
 # suspect_data$character <- ifelse(suspect_data$character %in% int_characters,
 #                                    suspect_data$character,
-#                                    'o')
+#                                    'a')
 # 
 # background_data$character <- ifelse(background_data$character %in% int_characters,
 #                                    background_data$character,
-#                                 'o')
+#                                 'a')
 
 table(questioned_data$character)
 table(suspect_data$character)
@@ -175,7 +171,7 @@ nw.min = p + 2
 # }
 # 
 # nlm(function_NR,10,data=model_data_list)
-#27.5
+#~27.5
 
 nw_hat = 27
 
@@ -240,26 +236,38 @@ for (w in unique(background_data$writer_id)){
 W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
 U_hat <- W_hat * (nw_hat - p  -1)
 
-
-sd_w <- sqrt(diag(W_hat))
-loc <- mean(log(sd_w))
-sc <- sd(log(sd_w))
-# sc <- mean(apply(              
-#   sapply(unique(background_data$writer_id), function(w) {
-#     df_w <- background_data[background_data$writer_id == w, 1:p]
-#     sqrt(diag(cov(as.matrix(df_w))))
-#   }), 1, function(x) sd(log(x))))
-
-
-# log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
-#   df_w <- background_data[background_data$writer_id == w, 1:p]
-#   log(apply(df_w, 2, sd))  # log-SD per feature per writer
-# }))
-
-# log_sds<-log(apply(background_data[,1:p],2,sd))
 # 
-# loc <- mean(log_sds)
-# sc  <- sd(log_sds)
+# sd_w <- sqrt(diag(W_hat))
+# loc <- mean(log(sd_w))
+# sc <- sd(log(sd_w))
+
+
+log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+  df_w <- background_data[background_data$writer_id == w, 1:p]
+  if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+  log(sqrt(diag(cov(as.matrix(df_w)))))
+})
+
+# Remove degenerate writers (columns with NA)
+log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+
+loc <- rowMeans(log_sd_mat)
+sc  <- apply(log_sd_mat, 1, sd)
+
+#loc <- mean(loc)
+#sc  <- mean(sc)
+
+# sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+#   df_w <- background_data[background_data$writer_id == w, 1:p]
+#   apply(df_w, 2, sd)  # log-SD per feature per writer
+# }))
+# 
+# # log_sds<-log(apply(background_data[,1:p],2,sd))
+# #
+#  loc <- mean(log(sds))
+#  sc  <- sd(log(sds))
+
+
 
 
 # per writer covariance and correlation matrices
@@ -301,7 +309,7 @@ sc <- sd(log(sd_w))
 #   maximum = FALSE
 # )$minimum
 # eta_hat
-# 9.8
+# ~9.9
 eta <- 9
 
 

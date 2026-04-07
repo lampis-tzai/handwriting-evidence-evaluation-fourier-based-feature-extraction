@@ -5,8 +5,8 @@ int<lower=1> P;  // Number of variables
 matrix[N, P] y;  // Data matrix
 vector[P] mu;    // Prior mean vector
 matrix[P, P] B;  // Prior covariance matrix for the mean vector
-real loc;   // real loc
-real sc;    // real sc
+vector[P] loc;   // real loc
+vector[P] sc;    // real sc
 real eta;  // eta lkj
 }
 parameters {

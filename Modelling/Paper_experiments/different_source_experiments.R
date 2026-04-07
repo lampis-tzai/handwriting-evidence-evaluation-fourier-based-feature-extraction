@@ -70,24 +70,19 @@ background_statistics_niw <- function(background_data){
   U_hat <- W_hat*(nw_hat-p-1)
   
   
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
+  
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
   eta <- 9
-  
-  
-  log_sds <- do.call(
-    c,
-    lapply(unique(background_data$writer_id), function(w) {
-      df_w <- background_data[background_data$writer_id == w, 1:p]
-      
-      if (nrow(df_w) < 3) {
-        return(NULL)  # skip this writer
-      }
-      
-      log(apply(df_w, 2, sd))  # log-SD per feature per writer
-    })
-  )
-  
-  loc <- mean(log_sds, na.rm=T)
-  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -164,24 +159,19 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
+  
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
   eta <- 9
-  
-  
-  log_sds <- do.call(
-    c,
-    lapply(unique(background_data$writer_id), function(w) {
-      df_w <- background_data[background_data$writer_id == w, 1:p]
-      
-      if (nrow(df_w) < 3) {
-        return(NULL)  # skip this writer
-      }
-      
-      log(apply(df_w, 2, sd))  # log-SD per feature per writer
-    })
-  )
-  
-  loc <- mean(log_sds, na.rm=T)
-  sc  <- sd(log_sds, na.rm=T)
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
@@ -212,7 +202,7 @@ different_source_def <- function(character_data,composition,w){
                                                              composition[w,2])),]
   
   
-  for (iter_for_eval in (1:1)){   
+  for (iter_for_eval in (1:100)){   
     
     
     sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
@@ -367,7 +357,14 @@ different_source_def <- function(character_data,composition,w){
   return(df_all)
 }
 
-comp_writers = t(combn(unique(IAM_data$writer_id), 2))
+
+dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
+dsr = as.data.frame(dsr)
+manova_lkj<-dsr[(dsr$model=='manova_iw' & dsr$BF>-50),]
+mean(manova_lkj$BF>0)
+comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
+
+#comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
@@ -406,23 +403,18 @@ df_all <- do.call("rbind", saves)
 write_xlsx(df_all,"Paper_experiments/different_source_results.xlsx")
 
 
-dsr <- read_excel("Paper_experiments/different_source_results.xlsx")
-
+dsr <- read_excel("Paper_experiments/different_source_results_small_BF.xlsx")
 dsr = as.data.frame(dsr)
-
-dsr[(dsr$model=='niw') & (dsr$character=='all') & (dsr$BF>0),]
-
 
 indx <- apply(dsr, 2, function(x) any(is.na(x) | is.infinite(x)))
 colnames(dsr)[indx]
 dsr[sapply(dsr, is.infinite)] <- NA
 dsr[is.na(dsr)] = 0
 
-dsr_binary = dsr
-mean(dsr_binary$BF>0)
-as.data.frame(dsr %>% group_by(model, character) %>% summarise(FP = mean(BF>0)))
+mean(dsr$BF>0)
+FPR <- as.data.frame(dsr %>% group_by(model, character) %>% summarize(FP = mean(BF>0)))
 
-
+FPR[order(FPR$FP),]
 #plot
 
 dsr$Prior_approach <- ifelse((dsr$model=="niw_conjugate" | dsr$model=="manova_conjugate"),"(1) NIW Conjugate",

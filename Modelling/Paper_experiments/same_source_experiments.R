@@ -17,11 +17,11 @@ source('Paper_experiments/Stan_BF_calculation.R')
 set.seed(2)
 
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -72,16 +72,20 @@ background_statistics_niw <- function(background_data){
   U_hat <- W_hat*(nw_hat-p-1)
   
   
-  eta <- 9
   
-  
-  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    log(apply(df_w, 2, sd))  # log-SD per feature per writer
-  }))
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
   
-  loc <- mean(log_sds, na.rm=T)
-  sc  <- sd(log_sds, na.rm=T)
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 9
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -158,16 +162,20 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  eta <- 9
   
-  
-  log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    log(apply(df_w, 2, sd))  # log-SD per feature per writer
-  }))
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
   
-  loc <- mean(log_sds, na.rm=T)
-  sc  <- sd(log_sds, na.rm=T)
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 9
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }

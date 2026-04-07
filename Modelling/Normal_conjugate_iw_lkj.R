@@ -8,7 +8,7 @@ library(CholWishart)
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
@@ -59,11 +59,11 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "118", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "62", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "92", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("118", "62")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("88", "92")), ]
 
 sample_size <-  floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
 
@@ -180,14 +180,23 @@ W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
 U_hat <- W_hat*(nw_hat-p-1)
 
 
-sd_w <- sqrt(diag(W_hat))
-loc <- mean(log(sd_w))
-sc <- sd(log(sd_w))
-# sc <- mean(apply(              
-#   sapply(unique(background_data$writer_id), function(w) {
-#     df_w <- background_data[background_data$writer_id == w, 1:p]
-#     sqrt(diag(cov(as.matrix(df_w))))
-#   }), 1, function(x) sd(log(x))))
+# sd_w <- sqrt(diag(W_hat))
+# loc <- mean(log(sd_w))
+# sc <- sd(log(sd_w))
+log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+  df_w <- background_data[background_data$writer_id == w, 1:p]
+  if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+  log(sqrt(diag(cov(as.matrix(df_w)))))
+})
+
+# Remove degenerate writers (columns with NA)
+log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+
+loc <- rowMeans(log_sd_mat)
+sc  <- apply(log_sd_mat, 1, sd)
+
+# loc <- mean(loc)
+# sc  <- mean(sc)
 
 
 # log_sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
