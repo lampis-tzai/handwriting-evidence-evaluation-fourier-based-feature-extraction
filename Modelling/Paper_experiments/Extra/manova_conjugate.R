@@ -1,4 +1,4 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -14,11 +14,11 @@ source('Paper_experiments/Stan_BF_calculation.R')
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
 IAM_data[,1] = log(IAM_data[,1])
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -37,15 +37,66 @@ count_ch
 table(IAM_data$character)
 
 
+
+background_statistics_niw <- function(background_data){
+  
+  
+  p=9
+  nw.min = p + 2
+  nw_hat = 19
+  
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
+    colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
+  
+  S = 0
+  Sw = 0
+  for (w in unique(background_data$writer_id)){
+    df_writer = background_data[(background_data$writer_id==w),]
+    if (nrow(df_writer)>2){
+      var_data = unname(as.matrix(df_writer[,1:p]))
+      theta_w = matrix(colMeans(var_data), nrow = 1)
+      S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+      S <- S + S.this
+      Cov.this = cov(var_data)*(nrow(df_writer)-1) 
+      Sw <- Sw + Cov.this
+    }
+  } 
+  
+  B_hat = S/(length(unique(background_data$writer_id)) - 1)
+  #B_hat = cov(background_data[,1:p])
+  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  
+  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  U_hat <- W_hat*(nw_hat-p-1)
+  
+  
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
+  
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 9
+  
+  return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
+}
+
 background_statistics_br <- function(background_data){
   
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = nw.min
+  nw_hat = 19
   
-  a_data = background_data[(background_data$character==1),1:p]
-  mu_hat=matrix(colMeans(a_data),nrow = 1)
+  a_data = background_data[(background_data$character==1),]
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
+    colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   for (w in unique(background_data$writer_id)){
@@ -108,15 +159,22 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  eta <- 4
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
   
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
   
-  loc <- mean(log(0.5 * diag(W_hat)))
-  sc  <- sd(log(0.5 * diag(W_hat)))
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 9
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
-
 
 
 same_source_def <- function(character_data,w){
@@ -131,7 +189,7 @@ same_source_def <- function(character_data,w){
   
   for (iter_for_eval in (1:1)){
     
-    sample_size <- min(100, nrow(writer_data_all))
+    sample_size <- min(100,nrow(writer_data_all))
     
     writer_data <- writer_data_all %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -214,7 +272,7 @@ different_source_def <- function(character_data,composition,w){
   for (iter_for_eval in (1)){   
     
     
-    sample_size <- min(50, nrow(writer_data_1))
+    sample_size <- min(60, nrow(writer_data_1))
     
     questioned_data <- writer_data_1 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -224,7 +282,7 @@ different_source_def <- function(character_data,composition,w){
         replace = FALSE
       )
     
-    sample_size <- min(50, nrow(writer_data_2))
+    sample_size <- min(60, nrow(writer_data_2))
     suspect_data <- writer_data_2 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(
