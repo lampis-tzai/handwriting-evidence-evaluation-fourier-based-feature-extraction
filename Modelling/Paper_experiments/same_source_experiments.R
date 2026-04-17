@@ -1,4 +1,4 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -17,11 +17,13 @@ source('Paper_experiments/Stan_BF_calculation.R')
 set.seed(2)
 
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,1] = log(IAM_data[,1])
+
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -45,7 +47,7 @@ background_statistics_niw <- function(background_data){
   
   p=9
   nw.min = p + 2
-  nw_hat = 27
+  nw_hat = nw.min
   
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -75,7 +77,7 @@ background_statistics_niw <- function(background_data){
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -85,7 +87,7 @@ background_statistics_niw <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -95,7 +97,7 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = 27
+  nw_hat = nw.min
   
   a_data = background_data[(background_data$character==1),]
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
@@ -165,7 +167,7 @@ background_statistics_br <- function(background_data){
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -175,7 +177,7 @@ background_statistics_br <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
@@ -188,7 +190,7 @@ stan_model_manova_lkj <- stan_model(file = "Stan_models/MANOVA_lkj_model.stan", 
 
 
 
-write_xlsx(data.frame(),"Paper_experiments/same_source_results_iter.xlsx")
+#write_xlsx(data.frame(),"Paper_experiments/same_source_results_iter.xlsx")
 
 
 same_source_def <- function(character_data,w){
@@ -344,12 +346,12 @@ same_source_def <- function(character_data,w){
   return(df_all)
 }
 
-#df_resutls<- same_source_def(IAM_data,'85')
+#df_resutls<- same_source_def(IAM_data,'61')
 #df_resutls
 
 detectCores()
 cl <- makeCluster(5,
-                  outfile="C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
+                  outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
 
 clusterEvalQ(cl, {
   library(dplyr)
@@ -368,8 +370,7 @@ clusterExport(cl,
                    "read_excel","write_xlsx"),
               envir=globalenv())
 
-#w.list <- sapply(unique(IAM_data$writer_id), list)
-w.list <- list("110","109","114","89","315","92","94","113","16","61")
+w.list <- sapply(unique(IAM_data$writer_id), list)
 
 system.time({saves = parLapply(cl, w.list,
                                same_source_def,
@@ -379,10 +380,16 @@ stopCluster(cl)
 
 df_all <- do.call("rbind", saves)
 
-write_xlsx(df_all,"Paper_experiments/same_source_results_all.xlsx")
+write_xlsx(df_all,"Paper_experiments/same_source_results_ls.xlsx")
 
 
-ssr <- read_excel("Paper_experiments/same_source_results_smallest_BF.xlsx")
+ssr <- read_excel("Paper_experiments/same_source_results_ls.xlsx")
+
+
+
+
+
+
 
 #manova_lkj<- ssr[(ssr$model=='manova_lkj'),]
 #manova_lkj[order(manova_lkj$BF),][1:10,1]

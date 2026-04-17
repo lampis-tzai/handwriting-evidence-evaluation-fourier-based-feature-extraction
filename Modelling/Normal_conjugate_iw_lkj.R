@@ -8,11 +8,11 @@ library(CholWishart)
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-IAM_data[,1] = log(IAM_data[,1])
+# IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+# IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -154,7 +154,7 @@ nw.min = p + 2
 # 
 # nlm(function_NR,10,data=model_data_list)
 
-nw_hat = 27
+nw_hat = nw.min
 
 mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
        colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -249,8 +249,8 @@ sc  <- apply(log_sd_mat, 1, sd)
 #   maximum = FALSE
 # )$minimum
 # eta_hat
-# 9.8
-eta <- 9
+
+eta <- 1
 
 
 

@@ -1,4 +1,4 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -15,12 +15,12 @@ source('Paper_experiments/Stan_BF_calculation.R')
 
 
 set.seed(2)
-db <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+db <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 db = as.data.frame(db)
 
 
-db[,2:9] = db[,2:9]/sqrt(db$area)
-db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
+#db[,2:9] = db[,2:9]/sqrt(db$area)
+#db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
 
 background_statistics_niw <- function(background_data){
   
@@ -29,7 +29,8 @@ background_statistics_niw <- function(background_data){
   nw.min = p + 2
   nw_hat = nw.min
   
-  mu_hat=matrix(colMeans(background_data[,1:p]),nrow = 1)
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
+    colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   Sw = 0
@@ -52,9 +53,20 @@ background_statistics_niw <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
-  eta=1
+  
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
+  
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 1
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -130,10 +142,20 @@ background_statistics_br <- function(background_data){
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
   
-  loc <- mean(log(diag(W_hat)))
-  sc <- sd(log(diag(W_hat)))
   
-  eta=1
+  log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
+    df_w <- background_data[background_data$writer_id == w, 1:p]
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
+    log(sqrt(diag(cov(as.matrix(df_w)))))
+  })
+  
+  # Remove degenerate writers (columns with NA)
+  log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
+  
+  loc <- rowMeans(log_sd_mat)
+  sc  <- apply(log_sd_mat, 1, sd)
+  
+  eta <- 1
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }

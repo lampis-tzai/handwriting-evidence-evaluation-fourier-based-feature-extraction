@@ -9,11 +9,11 @@ library(CholWishart)
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-IAM_data[,1] = log(IAM_data[,1])
+#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -81,11 +81,11 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "92", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "62", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "88", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "112", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("92", "88")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("62", "112")), ]
 
 sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
 
@@ -173,7 +173,7 @@ nw.min = p + 2
 # nlm(function_NR,10,data=model_data_list)
 #~27.5
 
-nw_hat = 27
+nw_hat = nw.min
 
 a_data = background_data[(background_data$character=='a'),]
 mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
@@ -236,10 +236,10 @@ for (w in unique(background_data$writer_id)){
 W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
 U_hat <- W_hat * (nw_hat - p  -1)
 
-# 
-# sd_w <- sqrt(diag(W_hat))
-# loc <- mean(log(sd_w))
-# sc <- sd(log(sd_w))
+
+#loc <- mean(log(diag(W_hat))/2)
+#sc <-  sd(log(diag(W_hat))/2)
+
 
 
 log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
@@ -254,8 +254,8 @@ log_sd_mat <- log_sd_mat[, colSums(is.na(log_sd_mat)) == 0]
 loc <- rowMeans(log_sd_mat)
 sc  <- apply(log_sd_mat, 1, sd)
 
-#loc <- mean(loc)
-#sc  <- mean(sc)
+# loc <- mean(loc)
+# sc  <- mean(sc)
 
 # sds <- do.call(c, lapply(unique(background_data$writer_id), function(w) {
 #   df_w <- background_data[background_data$writer_id == w, 1:p]
@@ -310,7 +310,7 @@ sc  <- apply(log_sd_mat, 1, sd)
 # )$minimum
 # eta_hat
 # ~9.9
-eta <- 9
+eta <- 1
 
 
 

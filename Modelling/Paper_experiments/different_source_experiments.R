@@ -18,8 +18,9 @@ IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-IAM_data[,1] = log(IAM_data[,1])
+# IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+# IAM_data[,1] = log(IAM_data[,1])
+
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -43,7 +44,7 @@ background_statistics_niw <- function(background_data){
   
   p=9
   nw.min = p + 2
-  nw_hat = 27
+  nw_hat = nw.min
   
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
@@ -72,7 +73,7 @@ background_statistics_niw <- function(background_data){
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -82,7 +83,7 @@ background_statistics_niw <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -92,7 +93,7 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = 27
+  nw_hat = nw.min
   
   a_data = background_data[(background_data$character==1),]
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
@@ -161,7 +162,7 @@ background_statistics_br <- function(background_data){
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -171,7 +172,7 @@ background_statistics_br <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
