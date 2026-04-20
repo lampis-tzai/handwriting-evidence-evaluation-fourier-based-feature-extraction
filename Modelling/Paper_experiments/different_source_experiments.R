@@ -14,17 +14,16 @@ source('Paper_experiments/Stan_BF_calculation.R')
 
 set.seed(2)
 
-IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting.xlsx")
+IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 IAM_data = as.data.frame(IAM_data)
 
 
-# IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-# IAM_data[,1] = log(IAM_data[,1])
+#IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
+#IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
-
 
 
 count_ch = as.data.frame(IAM_data %>% group_by(writer_id,character) %>% 
@@ -36,6 +35,7 @@ count_ch
 
 
 table(IAM_data$character)
+
 
 
 
@@ -65,10 +65,15 @@ background_statistics_niw <- function(background_data){
   
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(background_data[,1:p])
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
+  
   
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
@@ -113,7 +118,11 @@ background_statistics_br <- function(background_data){
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(a_data)
   
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
@@ -143,7 +152,11 @@ background_statistics_br <- function(background_data){
       }
       B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
       #B_hat_l = cov(letter_data)
-      if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+      if (any(is.na(B_hat_l)) || any(is.nan(B_hat_l))) {
+        B_hat_l[is.na(B_hat_l) | is.nan(B_hat_l)] <- 0
+        diag(B_hat_l) <- pmax(diag(B_hat_l), 1e-6)
+      }
+      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
       beta_cov[,,l_id] = B_hat_l
     }
   }
@@ -159,6 +172,7 @@ background_statistics_br <- function(background_data){
   }
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat * (nw_hat - p  -1)
+  
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
@@ -176,6 +190,7 @@ background_statistics_br <- function(background_data){
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
+
 
 stan_model_niw <- stan_model(file = "Stan_models/niw.stan", model_name = "niw")
 stan_model_nlkj <- stan_model(file = "Stan_models/normal_lkj_model.stan", model_name = "normal_lkj_model")
@@ -206,7 +221,7 @@ different_source_def <- function(character_data,composition,w){
   for (iter_for_eval in (1:100)){   
     
     
-    sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
+    sample_size <- min(100, nrow(writer_data_1))
     
     questioned_data <- writer_data_1 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
@@ -216,7 +231,7 @@ different_source_def <- function(character_data,composition,w){
         replace = FALSE
       )
     
-    sample_size <- floor(nrow(writer_data_2)/2)#min(50, nrow(writer_data_2))
+    sample_size <- min(100, nrow(writer_data_2))
     suspect_data <- writer_data_2 %>%
       add_count(character, name = "char_freq") %>%  # add frequency column
       slice_sample(

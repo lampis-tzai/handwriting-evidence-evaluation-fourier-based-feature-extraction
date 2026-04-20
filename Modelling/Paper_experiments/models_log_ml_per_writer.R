@@ -48,10 +48,15 @@ background_statistics_niw <- function(background_data){
   
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(background_data[,1:p])
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
+  
   
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
@@ -78,8 +83,9 @@ background_statistics_br <- function(background_data){
   nw.min = p + 2
   nw_hat = nw.min
   
-  a_data = background_data[(background_data$character==1),1:p]
-  mu_hat=matrix(colMeans(a_data),nrow = 1)
+  a_data = background_data[(background_data$character==1),]
+  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
+    colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
   S = 0
   for (w in unique(background_data$writer_id)){
@@ -95,7 +101,11 @@ background_statistics_br <- function(background_data){
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(a_data)
   
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
@@ -125,7 +135,11 @@ background_statistics_br <- function(background_data){
       }
       B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
       #B_hat_l = cov(letter_data)
-      if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+      if (any(is.na(B_hat_l)) || any(is.nan(B_hat_l))) {
+        B_hat_l[is.na(B_hat_l) | is.nan(B_hat_l)] <- 0
+        diag(B_hat_l) <- pmax(diag(B_hat_l), 1e-6)
+      }
+      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
       beta_cov[,,l_id] = B_hat_l
     }
   }
@@ -163,6 +177,7 @@ background_statistics_br <- function(background_data){
 
 
 
+
 stan_model_niw <- stan_model(file = "Stan_models/niw.stan", model_name = "niw")
 stan_model_nlkj <- stan_model(file = "Stan_models/normal_lkj_model.stan", model_name = "normal_lkj_model")
 stan_model_manova_iw <- stan_model(file = "Stan_models/MANOVA_iw_model.stan", model_name = "MANOVA_iw")
@@ -174,7 +189,17 @@ write_xlsx(data.frame(),"Paper_experiments/models_ml_per_writer_iter.xlsx")
 ml_per_writer_def <- function(character_data,w){
   df_all=data.frame()
   
-  writer_data = character_data[(character_data$writer_id==w),]
+  writer_data_all = character_data[(character_data$writer_id==w),]
+  
+  sample_size <- min(100, nrow(writer_data_all))
+  
+  writer_data <- writer_data_all %>%
+    add_count(character, name = "char_freq") %>%  # add frequency column
+    slice_sample(
+      n = sample_size,       # now it's a constant
+      weight_by = char_freq, # weighted sampling
+      replace = FALSE
+    )
   
   int_characters = unique(writer_data$character)
   l = length(int_characters)
@@ -265,11 +290,19 @@ ml_per_writer_def <- function(character_data,w){
 }
 
 
-#ml_per_writer_def(db,'158')
+#ml_per_writer_def(db,'130')
+
+unique(db$writer_id)
 
 detectCores()
 cl <- makeCluster(5,
-                  outfile="C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/log.txt")
+                  outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
+
+clusterEvalQ(cl, {
+  library(dplyr)
+  library(Matrix)
+})
+
 clusterExport(cl,
               list("background_statistics_br","background_statistics_niw","abind",
                    "is.positive.definite","nearPD","fitdistr","lmvgamma", "inv",
@@ -311,7 +344,7 @@ log_BF_manova_vs_normal['BF_6_3'] = ssr$loglik_manova_lkj-ssr$loglik_nlkj
 
 log_BF_manova_vs_normal
 
-colMeans(log_BF_manova_vs_normal>0)
+colMeans(log_BF_manova_vs_normal>0, na.rm=T)
 
 
 log_BF_conjugate_vs_non_iW <- data.frame(Writer = ssr$writer) 
@@ -323,7 +356,7 @@ log_BF_conjugate_vs_non_iW['BF_4_5'] = ssr$loglik_manova_conjugate-ssr$loglik_ma
 
 log_BF_conjugate_vs_non_iW
 
-colMeans(log_BF_conjugate_vs_non_iW>0)
+colMeans(log_BF_conjugate_vs_non_iW>0, na.rm=T)
 
 
 
@@ -335,7 +368,7 @@ log_BF_conjugate_vs_lkj['BF_4_6'] = ssr$loglik_manova_conjugate-ssr$loglik_manov
 
 
 log_BF_conjugate_vs_lkj
-colMeans(log_BF_conjugate_vs_lkj>0)
+colMeans(log_BF_conjugate_vs_lkj>0, na.rm=T)
 
 
 
@@ -346,7 +379,7 @@ log_BF_iw_vs_lkj['BF_2_3'] = ssr$loglik_niw-ssr$loglik_nlkj
 log_BF_iw_vs_lkj['BF_5_6'] = ssr$loglik_manova_iw-ssr$loglik_manova_lkj
 
 log_BF_iw_vs_lkj
-colMeans(log_BF_iw_vs_lkj>0)
+colMeans(log_BF_iw_vs_lkj>0, na.rm=T)
 
 # 
 # 

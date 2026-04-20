@@ -68,7 +68,11 @@ background_statistics_niw <- function(background_data){
   
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(background_data[,1:p])
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
   U_hat <- W_hat*(nw_hat-p-1)
@@ -117,7 +121,11 @@ background_statistics_br <- function(background_data){
   B_hat = S/(length(unique(background_data$writer_id)) - 1)
   #B_hat = cov(a_data)
   
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
+    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
+    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
+  }
+  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
@@ -147,7 +155,11 @@ background_statistics_br <- function(background_data){
       }
       B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
       #B_hat_l = cov(letter_data)
-      if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+      if (any(is.na(B_hat_l)) || any(is.nan(B_hat_l))) {
+        B_hat_l[is.na(B_hat_l) | is.nan(B_hat_l)] <- 0
+        diag(B_hat_l) <- pmax(diag(B_hat_l), 1e-6)
+      }
+      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
       beta_cov[,,l_id] = B_hat_l
     }
   }
