@@ -32,7 +32,7 @@ writers_ids <- unique(IAM_data$writer_id)
 count_ch = as.data.frame(IAM_data %>% group_by(writer_id,character) %>% 
                            count()%>% 
                            group_by(character) %>% 
-                           summarise(count = sum(n>18)))
+                           summarise(count = sum(n>3)))
 
 count_ch
 
@@ -52,29 +52,30 @@ background_statistics_niw <- function(background_data){
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
   
-  S = 0
-  Sw = 0
+  S <- 0
+  Sw <- 0
+  n_rows <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-      var_data = unname(as.matrix(df_writer[,1:p]))
-      theta_w = matrix(colMeans(var_data), nrow = 1)
+      n_rows <- n_rows + nrow(df_writer)
+      n_writers <- n_writers+1
+      var_data <- unname(as.matrix(df_writer[,1:p]))
+      theta_w <- matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
-      Cov.this = cov(var_data)*(nrow(df_writer)-1) 
+      Cov.this <- cov(var_data)*(nrow(df_writer)-1) 
       Sw <- Sw + Cov.this
     }
   } 
   
-  B_hat = S/(length(unique(background_data$writer_id)) - 1)
+  B_hat = S/(n_writers - 1)
   #B_hat = cov(background_data[,1:p])
-  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
-    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
-    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
-  }
-  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
+  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
   
-  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  
+  W_hat <- Sw/(n_rows - n_writers)
   U_hat <- W_hat*(nw_hat-p-1)
   
   
@@ -107,25 +108,24 @@ background_statistics_br <- function(background_data){
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
     colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
-  S = 0
+  S <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-      theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
+      n_writers <- n_writers+1
+      var_data <- unname(as.matrix(df_writer[,1:p]))
+      theta_w <- matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
     }
-  }
+  } 
   
-  B_hat = S/(length(unique(background_data$writer_id)) - 1)
-  #B_hat = cov(a_data)
+  B_hat = S/(n_writers - 1)
+  #B_hat = cov(background_data[,1:p])
+  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
   
-  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
-    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
-    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
-  }
-  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
@@ -137,10 +137,12 @@ background_statistics_br <- function(background_data){
       beta_l = colMeans(letter_diff)
       beta_mu[l_id,] = beta_l
       S = 0
+      n_rows <- 0
       for (w in unique(background_data$writer_id)){
         letter_writer = background_data[(
           background_data$character==l_id)& (background_data$writer_id==w),1:p]
         if (nrow(letter_writer)>2){
+          n_rows <- n_rows + nrow(letter_writer)
           a_data_writer = background_data[(
             background_data$character==1)& (background_data$writer_id==w),1:p]
           
@@ -153,12 +155,9 @@ background_statistics_br <- function(background_data){
           S <- S + S.this
         }
       }
-      B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
+      B_hat_l = S/(n_rows - 1)
       #B_hat_l = cov(letter_data)
-      if (any(is.na(B_hat_l)) || any(is.nan(B_hat_l))) {
-        B_hat_l[is.na(B_hat_l) | is.nan(B_hat_l)] <- 0
-        diag(B_hat_l) <- pmax(diag(B_hat_l), 1e-6)
-      }
+      
       if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
       beta_cov[,,l_id] = B_hat_l
     }
@@ -166,14 +165,18 @@ background_statistics_br <- function(background_data){
   
   
   Sw = 0
+  n_rows <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
+      n_rows <- n_rows + nrow(df_writer)
+      n_writers <- n_writers+1
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
   }
-  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  W_hat <- Sw/(n_rows - n_writers)
   U_hat <- W_hat * (nw_hat - p  -1)
   
   
@@ -358,8 +361,8 @@ same_source_def <- function(character_data,w){
   return(df_all)
 }
 
-#df_resutls<- same_source_def(IAM_data,'61')
-#df_resutls
+df_resutls<- same_source_def(IAM_data,'37')
+df_resutls
 
 detectCores()
 cl <- makeCluster(5,

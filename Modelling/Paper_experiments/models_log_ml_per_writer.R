@@ -18,9 +18,7 @@ set.seed(2)
 db <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 db = as.data.frame(db)
 
-
-#db[,2:9] = db[,2:9]/sqrt(db$area)
-#db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
+db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
 
 background_statistics_niw <- function(background_data){
   
@@ -290,7 +288,7 @@ ml_per_writer_def <- function(character_data,w){
 }
 
 
-#ml_per_writer_def(db,'130')
+#ml_per_writer_def(db,'16')
 
 unique(db$writer_id)
 

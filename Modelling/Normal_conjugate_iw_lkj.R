@@ -1,3 +1,4 @@
+setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -20,10 +21,10 @@ writers_ids <- unique(IAM_data$writer_id)
 
 #same person
 
-writer_data_all = IAM_data[(IAM_data$writer_id==writers_ids[1]),]
-background_data = IAM_data[(IAM_data$writer_id!=writers_ids[1]),]
+writer_data_all = IAM_data[(IAM_data$writer_id==37),]
+background_data = IAM_data[(IAM_data$writer_id!=37),]
 
-sample_size <- min(100, nrow(writer_data_all))
+sample_size <- nrow(writer_data_all)
 
 writer_data <- writer_data_all %>%
   add_count(character, name = "char_freq") %>%  # add frequency column
@@ -33,8 +34,8 @@ writer_data <- writer_data_all %>%
     replace = FALSE
   )
 
-questioned_data <- writer_data[1:50,]
-suspect_data <- writer_data[51:100,]
+questioned_data <- writer_data[1:floor(sample_size/2),]
+suspect_data <- writer_data[(floor(sample_size/2)+1):sample_size,]
 
 # intersect characters
 #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
@@ -57,7 +58,11 @@ table(suspect_data$character)
 
 alphabet_map <- setNames(seq_along(int_characters), int_characters) 
 
-
+questioned_data<- questioned_data[questioned_data$character=='b',]
+suspect_data<- suspect_data[suspect_data$character=='b',]
+background_data<-background_data[background_data$character=='b',]
+writer_data <- rbind(questioned_data,suspect_data)
+  
 # different writers
 writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
 
@@ -159,24 +164,30 @@ nw_hat = nw.min
 mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
        colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
 
-S = 0
-Sw = 0
+S <- 0
+Sw <- 0
+n_rows <- 0
+n_writers <- 0
 for (w in unique(background_data$writer_id)){
   df_writer = background_data[(background_data$writer_id==w),]
-  var_data = unname(as.matrix(df_writer[,1:p]))
-  theta_w = matrix(colMeans(var_data), nrow = 1)
-  S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-  S <- S + S.this
-  Cov.this = cov(var_data)*(nrow(df_writer)-1) 
-  Sw <- Sw + Cov.this
+  if (nrow(df_writer)>2){
+    n_rows <- n_rows + nrow(df_writer)
+    n_writers <- n_writers+1
+    var_data <- unname(as.matrix(df_writer[,1:p]))
+    theta_w <- matrix(colMeans(var_data), nrow = 1)
+    S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
+    S <- S + S.this
+    Cov.this <- cov(var_data)*(nrow(df_writer)-1) 
+    Sw <- Sw + Cov.this
+  }
 } 
 
-B_hat = S/(length(unique(background_data$writer_id)) - 1)
+B_hat = S/(n_writers - 1)
 #B_hat = cov(background_data[,1:p])
 if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
 
 
-W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+W_hat <- Sw/(n_rows - n_writers)
 U_hat <- W_hat*(nw_hat-p-1)
 
 
@@ -185,7 +196,7 @@ U_hat <- W_hat*(nw_hat-p-1)
 # sc <- sd(log(sd_w))
 log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
   df_w <- background_data[background_data$writer_id == w, 1:p]
-  if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+  if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
   log(sqrt(diag(cov(as.matrix(df_w)))))
 })
 
