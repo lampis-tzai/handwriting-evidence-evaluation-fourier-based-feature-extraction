@@ -19,7 +19,7 @@ IAM_data = as.data.frame(IAM_data)
 
 
 #IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-IAM_data[,1] = log(IAM_data[,1])
+#IAM_data[,1] = log(IAM_data[,1])
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
 writers_ids <- unique(IAM_data$writer_id)
@@ -43,36 +43,42 @@ background_statistics_niw <- function(background_data){
   
   p=9
   nw.min = p + 2
-  nw_hat = 19
+  nw_hat = nw.min
   
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(background_data$writer_id), function(w)
     colMeans(background_data[background_data$writer_id == w, 1:p])))), nrow = 1)
   
-  S = 0
-  Sw = 0
+  S <- 0
+  Sw <- 0
+  n_rows <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-      var_data = unname(as.matrix(df_writer[,1:p]))
-      theta_w = matrix(colMeans(var_data), nrow = 1)
+      n_rows <- n_rows + nrow(df_writer)
+      n_writers <- n_writers+1
+      var_data <- unname(as.matrix(df_writer[,1:p]))
+      theta_w <- matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
-      Cov.this = cov(var_data)*(nrow(df_writer)-1) 
+      Cov.this <- cov(var_data)*(nrow(df_writer)-1) 
       Sw <- Sw + Cov.this
     }
   } 
   
-  B_hat = S/(length(unique(background_data$writer_id)) - 1)
+  B_hat = S/(n_writers - 1)
   #B_hat = cov(background_data[,1:p])
   if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
   
-  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  
+  W_hat <- Sw/(n_rows - n_writers)
   U_hat <- W_hat*(nw_hat-p-1)
+  
   
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -82,7 +88,7 @@ background_statistics_niw <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
@@ -92,27 +98,30 @@ background_statistics_br <- function(background_data){
   p=9
   l = length(unique(background_data$character))
   nw.min = p + 2
-  nw_hat = 19
+  nw_hat = nw.min
   
   a_data = background_data[(background_data$character==1),]
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
     colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
-  S = 0
+  S <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-      theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
+      n_writers <- n_writers+1
+      var_data <- unname(as.matrix(df_writer[,1:p]))
+      theta_w <- matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
     }
-  }
+  } 
   
-  B_hat = S/(length(unique(background_data$writer_id)) - 1)
-  #B_hat = cov(a_data)
-  
+  B_hat = S/(n_writers - 1)
+  #B_hat = cov(background_data[,1:p])
   if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
@@ -124,10 +133,12 @@ background_statistics_br <- function(background_data){
       beta_l = colMeans(letter_diff)
       beta_mu[l_id,] = beta_l
       S = 0
+      n_rows <- 0
       for (w in unique(background_data$writer_id)){
         letter_writer = background_data[(
           background_data$character==l_id)& (background_data$writer_id==w),1:p]
         if (nrow(letter_writer)>2){
+          n_rows <- n_rows + nrow(letter_writer)
           a_data_writer = background_data[(
             background_data$character==1)& (background_data$writer_id==w),1:p]
           
@@ -140,28 +151,34 @@ background_statistics_br <- function(background_data){
           S <- S + S.this
         }
       }
-      B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
+      B_hat_l = S/(n_rows - 1)
       #B_hat_l = cov(letter_data)
-      if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+      
+      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
       beta_cov[,,l_id] = B_hat_l
     }
   }
   
   
   Sw = 0
+  n_rows <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
+      n_rows <- n_rows + nrow(df_writer)
+      n_writers <- n_writers+1
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
   }
-  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  W_hat <- Sw/(n_rows - n_writers)
   U_hat <- W_hat * (nw_hat - p  -1)
+  
   
   log_sd_mat <- sapply(unique(background_data$writer_id), function(w) {
     df_w <- background_data[background_data$writer_id == w, 1:p]
-    if (nrow(df_w) <= p) return(rep(NA_real_, p))  # skip degenerate writers
+    if (nrow(df_w) <= 3) return(rep(NA_real_, p))  # skip degenerate writers
     log(sqrt(diag(cov(as.matrix(df_w)))))
   })
   
@@ -171,7 +188,7 @@ background_statistics_br <- function(background_data){
   loc <- rowMeans(log_sd_mat)
   sc  <- apply(log_sd_mat, 1, sd)
   
-  eta <- 9
+  eta <- 1
   
   return(list(mu_hat,B_hat,beta_mu,beta_cov,nw_hat,U_hat,loc,sc,eta))
 }
@@ -353,4 +370,4 @@ df_conjugate_all_ds <- do.call(rbind, df_conjugate_all_list)
 
 mean(df_conjugate_all_ds$BF>0)
 
-df_conjugate_all_ds[df_conjugate_all_ds$BF>0,]
+df_conjugate_all_ds[df_conjugate_all_ds$BF>(-50),]

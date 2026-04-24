@@ -202,191 +202,267 @@ stan_model_manova_lkj <- stan_model(file = "Stan_models/MANOVA_lkj_model.stan", 
 
 write_xlsx(data.frame(),"Paper_experiments/different_source_results_iter.xlsx")
 
-different_source_def <- function(character_data,composition,w){
+different_source_def <- function(character_data, composition, w) {
+  
+  # ── helper: structured log to stderr (also captured in outfile=) ───────────
+  log_msg <- function(level, location, msg) {
+    cat(sprintf("[%s][%s][pair=%s-%s] %s\n",
+                format(Sys.time(), "%H:%M:%S"), level,
+                composition[w, 1], composition[w, 2],
+                paste0("[", location, "] ", msg)),
+        file = stderr())
+  }
   
   all_chars <- sort(unique(character_data$character))
-  l <- length(all_chars)
+  l         <- length(all_chars)
+  df_all    <- data.frame()
   
-  df_all=data.frame()
+  writer_data_1 <- character_data[character_data$writer_id == composition[w, 1], ]
+  writer_data_2 <- character_data[character_data$writer_id == composition[w, 2], ]
+  background_data <- character_data[!(character_data$writer_id %in% c(composition[w, 1],
+                                                                      composition[w, 2])), ]
   
-  writer_data_1 = character_data[(character_data$writer_id == composition[w,1]),]
-  
-  writer_data_2 = character_data[(character_data$writer_id == composition[w,2]),]
-  
-  writer_data_all <- rbind(writer_data_1,writer_data_2)
-  
-  background_data = character_data[!(character_data$writer_id %in% c(composition[w,1],
-                                                             composition[w,2])),]
-  
-  
-  for (iter_for_eval in (1:100)){   
+  for (iter_for_eval in seq_len(1)) {
     
+    bf_rows <- list()
+    i       <- 1
     
-    sample_size <- min(100, nrow(writer_data_1))
+    # ── sample split with error capture ───────────────────────────────────────
+    sample_size_1 <- min(100, nrow(writer_data_1))
+    questioned_data <- tryCatch({
+      writer_data_1 %>%
+        add_count(character, name = "char_freq") %>%
+        slice_sample(
+          n         = sample_size_1,
+          weight_by = char_freq,
+          replace   = FALSE
+        )
+    }, error = function(e) {
+      log_msg("ERROR",
+              paste0("iter=", iter_for_eval, " slice_sample writer1"),
+              conditionMessage(e))
+      NULL
+    })
+    if (is.null(questioned_data)) next
     
-    questioned_data <- writer_data_1 %>%
-      add_count(character, name = "char_freq") %>%  # add frequency column
-      slice_sample(
-        n = sample_size,       # now it's a constant
-        weight_by = char_freq, # weighted sampling
-        replace = FALSE
-      )
+    sample_size_2 <- min(100, nrow(writer_data_2))
+    suspect_data <- tryCatch({
+      writer_data_2 %>%
+        add_count(character, name = "char_freq") %>%
+        slice_sample(
+          n         = sample_size_2,
+          weight_by = char_freq,
+          replace   = FALSE
+        )
+    }, error = function(e) {
+      log_msg("ERROR",
+              paste0("iter=", iter_for_eval, " slice_sample writer2"),
+              conditionMessage(e))
+      NULL
+    })
+    if (is.null(suspect_data)) next
     
-    sample_size <- min(100, nrow(writer_data_2))
-    suspect_data <- writer_data_2 %>%
-      add_count(character, name = "char_freq") %>%  # add frequency column
-      slice_sample(
-        n = sample_size,       # now it's a constant
-        weight_by = char_freq, # weighted sampling
-        replace = FALSE
-      )
-    
-    # intersect characters
-    #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
-    
-    #questioned_data$character <- questioned_data[questioned_data$character %in% int_characters, ]
-    #suspect_data$character <- suspect_data[suspect_data$character %in% int_characters, ]
-    
-    #alphabet_map <- setNames(seq_along(int_characters), int_characters) 
-    
-    #background_data <- background_data_all[background_data_all$character %in% int_characters,]
-    
+    # ── factor + mapping with safety ─────────────────────────────────────────
     questioned_data$character <- factor(questioned_data$character, levels = all_chars)
-    suspect_data$character <- factor(suspect_data$character, levels = all_chars)
+    suspect_data$character    <- factor(suspect_data$character,    levels = all_chars)
     
-    #table(questioned_data$character)
-    #table(suspect_data$character)
+    alphabet_map <- setNames(seq_along(all_chars), all_chars)
     
-    alphabet_map <- setNames(seq_along(all_chars), all_chars) 
+    questioned_data$character <- as.numeric(alphabet_map[questioned_data$character])
+    suspect_data$character    <- as.numeric(alphabet_map[suspect_data$character])
     
-    
-    questioned_data$character <- as.numeric(alphabet_map[questioned_data$character]) 
-    suspect_data$character <- as.numeric(alphabet_map[suspect_data$character])
-    
-    
-    background_data$character <- as.numeric(alphabet_map[background_data$character])
+    bg <- background_data
+    bg$character <- as.numeric(alphabet_map[bg$character])
     
     chars <- unique(questioned_data$character)
-    bf_rows <- vector("list", length(chars))
     
-    i <- 1
+    # ── per-character NIW models with tryCatch ───────────────────────────────
     for (ch in chars) {
-      questioned_data_ch <- questioned_data[questioned_data$character == ch, ]
-      suspect_data_ch <- suspect_data[suspect_data$character == ch, ]
+      q_ch <- questioned_data[questioned_data$character == ch, ]
+      s_ch <- suspect_data[suspect_data$character == ch, ]
       
-      if ((nrow(questioned_data_ch)>1) & (nrow(suspect_data_ch)>1)){
-      
-        background_stats_niw_ch <- background_statistics_niw(
-          background_data[background_data$character == ch, ]
-        )
-        niw_conjugate_ch <- niw_conjugate(
-          questioned_data_ch,
-          suspect_data_ch,
-          background_stats_niw_ch
-        )
-        
-        niw_ch <- normal_iW(
-          questioned_data_ch,
-          suspect_data_ch,
-          background_stats_niw_ch
-        )
-        
-        nlkj_ch <- normal_lkj(
-          questioned_data_ch,
-          suspect_data_ch,
-          background_stats_niw_ch
-        )
-        
-        # 3 rows per character: one for each model
-        bf_rows[[i]] <- data.frame(
-          writer1 = composition[w,1],
-          writer2 = composition[w,2],
-          character = names(alphabet_map[ch]),
-          model     = c("niw_conjugate", "niw", "nlkj"),
-          BF        = c(niw_conjugate_ch, niw_ch, nlkj_ch)
-        )
-        i <- i + 1
+      if (nrow(q_ch) <= 1 || nrow(s_ch) <= 1) {
+        log_msg("WARN",
+                paste0("iter=", iter_for_eval, " ch=", ch),
+                paste0("skipped: nrow(Q)=", nrow(q_ch),
+                       " nrow(S)=", nrow(s_ch)))
+        next
       }
+      
+      bg_stats_ch <- tryCatch(
+        background_statistics_niw(bg[bg$character == ch, ]),
+        error = function(e) {
+          log_msg("ERROR",
+                  paste0("iter=", iter_for_eval,
+                         " background_statistics_niw ch=", ch),
+                  conditionMessage(e))
+          NULL
+        }
+      )
+      if (is.null(bg_stats_ch)) next
+      
+      niw_conj <- tryCatch(
+        niw_conjugate(q_ch, s_ch, bg_stats_ch),
+        error = function(e) {
+          log_msg("ERROR",
+                  paste0("niw_conjugate ch=", ch),
+                  conditionMessage(e))
+          NA_real_
+        }
+      )
+      niw_val <- tryCatch(
+        normal_iW(q_ch, s_ch, bg_stats_ch),
+        error = function(e) {
+          log_msg("ERROR",
+                  paste0("normal_iW ch=", ch),
+                  conditionMessage(e))
+          NA_real_
+        }
+      )
+      nlkj_val <- tryCatch(
+        normal_lkj(q_ch, s_ch, bg_stats_ch),
+        error = function(e) {
+          log_msg("ERROR",
+                  paste0("normal_lkj ch=", ch),
+                  conditionMessage(e))
+          NA_real_
+        }
+      )
+      
+      bf_rows[[i]] <- data.frame(
+        writer1   = composition[w, 1],
+        writer2   = composition[w, 2],
+        character = names(alphabet_map)[ch],
+        model     = c("niw_conjugate", "niw", "nlkj"),
+        BF        = c(niw_conj, niw_val, nlkj_val)
+      )
+      i <- i + 1
     }
     
-    
-    background_stats_niw_all <- background_statistics_niw(background_data)
-    
-    niw_conjugate_all <- niw_conjugate(questioned_data,
-                                       suspect_data,
-                                       background_stats_niw_all)
-    
-    niw_all <- normal_iW(questioned_data,
-                         suspect_data,
-                         background_stats_niw_all)
-    
-    nlkj <- normal_lkj(questioned_data,
-                       suspect_data,
-                       background_stats_niw_all)
-    
-    bf_rows[[i]] <- data.frame(
-      writer1 = composition[w,1],
-      writer2 = composition[w,2],
-      character = 'all',
-      model     = c("niw_conjugate", "niw", "nlkj"),
-      BF        = c(niw_conjugate_all, niw_all, nlkj)
-    )
-    i <- i + 1
-    
-    background_stats_br <- background_statistics_br(background_data)
-    
-    
-    
-    manova_conjugate <- MANOVA_conjugate(questioned_data,
-                                         suspect_data,
-                                         background_stats_br)
-    
-    manova_iw <- MANOVA_iw(questioned_data,
-                           suspect_data,
-                           background_stats_br)
-    
-    manova_lkj <- MANOVA_LKJ(questioned_data,
-                             suspect_data,
-                             background_stats_br)
-    
-    bf_rows[[i]] <- data.frame(
-      writer1 = composition[w,1],
-      writer2 = composition[w,2],
-      character = 'all',
-      model     = c("manova_conjugate", "manova_iw", "manova_lkj"),
-      BF        = c(manova_conjugate, manova_iw, manova_lkj)
+    # ── all-character NIW with tryCatch ──────────────────────────────────────
+    bg_stats_all <- tryCatch(
+      background_statistics_niw(bg),
+      error = function(e) {
+        log_msg("ERROR",
+                paste0("iter=", iter_for_eval,
+                       " background_statistics_niw ALL"),
+                conditionMessage(e))
+        NULL
+      }
     )
     
+    if (!is.null(bg_stats_all)) {
+      niw_conj_all <- tryCatch(
+        niw_conjugate(questioned_data, suspect_data, bg_stats_all),
+        error = function(e) {
+          log_msg("ERROR", "niw_conjugate ALL", conditionMessage(e))
+          NA_real_
+        }
+      )
+      niw_all_val <- tryCatch(
+        normal_iW(questioned_data, suspect_data, bg_stats_all),
+        error = function(e) {
+          log_msg("ERROR", "normal_iW ALL", conditionMessage(e))
+          NA_real_
+        }
+      )
+      nlkj_all <- tryCatch(
+        normal_lkj(questioned_data, suspect_data, bg_stats_all),
+        error = function(e) {
+          log_msg("ERROR", "normal_lkj ALL", conditionMessage(e))
+          NA_real_
+        }
+      )
+      
+      bf_rows[[i]] <- data.frame(
+        writer1   = composition[w, 1],
+        writer2   = composition[w, 2],
+        character = "all",
+        model     = c("niw_conjugate", "niw", "nlkj"),
+        BF        = c(niw_conj_all, niw_all_val, nlkj_all)
+      )
+      i <- i + 1
+    }
     
-    bf_df <- bind_rows(bf_rows)
+    # ── all-character MANOVA with tryCatch ───────────────────────────────────
+    bg_stats_br <- tryCatch(
+      background_statistics_br(bg),
+      error = function(e) {
+        log_msg("ERROR",
+                paste0("iter=", iter_for_eval,
+                       " background_statistics_br"),
+                conditionMessage(e))
+        NULL
+      }
+    )
     
-    df_new <- bf_df
+    if (!is.null(bg_stats_br)) {
+      mv_conj <- tryCatch(
+        MANOVA_conjugate(questioned_data, suspect_data, bg_stats_br),
+        error = function(e) {
+          log_msg("ERROR", "MANOVA_conjugate", conditionMessage(e))
+          NA_real_
+        }
+      )
+      mv_iw <- tryCatch(
+        MANOVA_iw(questioned_data, suspect_data, bg_stats_br),
+        error = function(e) {
+          log_msg("ERROR", "MANOVA_iw", conditionMessage(e))
+          NA_real_
+        }
+      )
+      mv_lkj <- tryCatch(
+        MANOVA_LKJ(questioned_data, suspect_data, bg_stats_br),
+        error = function(e) {
+          log_msg("ERROR", "MANOVA_LKJ", conditionMessage(e))
+          NA_real_
+        }
+      )
+      
+      bf_rows[[i]] <- data.frame(
+        writer1   = composition[w, 1],
+        writer2   = composition[w, 2],
+        character = "all",
+        model     = c("manova_conjugate", "manova_iw", "manova_lkj"),
+        BF        = c(mv_conj, mv_iw, mv_lkj)
+      )
+    }
     
-    print(paste0("Writer1: ",composition[w,1]," vs Writer2: ",
-                 composition[w,2],", iteration:",iter_for_eval))
+    df_all <- rbind(df_all, bind_rows(bf_rows))
     
-    df_all = rbind(df_all,df_new)
+    cat(sprintf("[%s][INFO][pair=%s-%s] completed iter %d/100\n",
+                format(Sys.time(), "%H:%M:%S"),
+                composition[w, 1], composition[w, 2],
+                iter_for_eval))
   }
-  dsr_i <- read_excel("Paper_experiments/different_source_results_iter.xlsx")
-  dsr_i = rbind(dsr_i,df_all)
-  write_xlsx(dsr_i,"Paper_experiments/different_source_results_iter.xlsx")
-
+  
+  # ── write results with protection (like same_source_def) ───────────────────
+  tryCatch({
+    dsr_i <- readxl::read_excel("Paper_experiments/different_source_results_iter.xlsx")
+    writexl::write_xlsx(rbind(dsr_i, df_all),
+                        "Paper_experiments/different_source_results_iter.xlsx")
+  }, error = function(e) {
+    log_msg("ERROR", "write_xlsx", conditionMessage(e))
+    saveRDS(df_all,
+            file = paste0("Paper_experiments/fallback_pair_",
+                          composition[w, 1], "_", composition[w, 2], ".rds"))
+  })
+  
   return(df_all)
 }
 
+# dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
+# dsr = as.data.frame(dsr)
+# manova_lkj<-dsr[(dsr$model=='manova_iw' & dsr$BF>-50),]
+# mean(manova_lkj$BF>0)
+# comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
 
-dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
-dsr = as.data.frame(dsr)
-manova_lkj<-dsr[(dsr$model=='manova_iw' & dsr$BF>-50),]
-mean(manova_lkj$BF>0)
-comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
-
-#comp_writers = t(combn(unique(IAM_data$writer_id), 2))
+comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
-#example_df <- different_source_def(IAM_data,comp_writers, sample(w.list,1)[[1]])
-#example_df
+example_df <- different_source_def(IAM_data,comp_writers, sample(w.list,1)[[1]])
+example_df
 
 cl <- makeCluster(5,
                   outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")

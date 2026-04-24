@@ -20,22 +20,21 @@ IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 writers_ids <- unique(IAM_data$writer_id)
 
 #same person
-
-writer_data_all = IAM_data[(IAM_data$writer_id==37),]
-background_data = IAM_data[(IAM_data$writer_id!=37),]
+writer_data_all <- IAM_data[IAM_data$writer_id == 17, ]
+background_data  <- IAM_data[IAM_data$writer_id != 17, ]
 
 sample_size <- nrow(writer_data_all)
 
 writer_data <- writer_data_all %>%
-  add_count(character, name = "char_freq") %>%  # add frequency column
+  add_count(character, name = "char_freq") %>%
   slice_sample(
-    n = sample_size,       # now it's a constant
-    weight_by = char_freq, # weighted sampling
-    replace = FALSE
+    n           = sample_size,
+    weight_by   = char_freq,
+    replace     = FALSE
   )
 
-questioned_data <- writer_data[1:floor(sample_size/2),]
-suspect_data <- writer_data[(floor(sample_size/2)+1):sample_size,]
+questioned_data <- writer_data[seq_len(floor(sample_size / 2)), ]
+suspect_data    <- writer_data[seq(floor(sample_size / 2) + 1, sample_size), ]
 
 # intersect characters
 #int_characters <- sort(intersect(questioned_data$character,suspect_data$character))
@@ -58,10 +57,10 @@ table(suspect_data$character)
 
 alphabet_map <- setNames(seq_along(int_characters), int_characters) 
 
-questioned_data<- questioned_data[questioned_data$character=='b',]
-suspect_data<- suspect_data[suspect_data$character=='b',]
-background_data<-background_data[background_data$character=='b',]
-writer_data <- rbind(questioned_data,suspect_data)
+# questioned_data<- questioned_data[questioned_data$character=='p',]
+# suspect_data<- suspect_data[suspect_data$character=='p',]
+# background_data<-background_data[background_data$character=='p',]
+# writer_data <- rbind(questioned_data,suspect_data)
   
 # different writers
 writer_data_1 <- IAM_data[IAM_data$writer_id == "88", ]
