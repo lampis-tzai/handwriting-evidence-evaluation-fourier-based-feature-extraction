@@ -22,7 +22,7 @@ IAM_data = as.data.frame(IAM_data)
 
 
 #IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-#IAM_data[,1] = log(IAM_data[,1])
+IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 

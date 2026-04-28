@@ -1,4 +1,4 @@
-setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/lampis/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -17,6 +17,8 @@ source('Paper_experiments/Stan_BF_calculation.R')
 set.seed(2)
 db <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx")
 db = as.data.frame(db)
+
+db[,1] = log(db[,1])
 
 db = cbind(scale(db[,1:9]),db[,10:ncol(db)])
 
@@ -74,6 +76,7 @@ background_statistics_niw <- function(background_data){
   return(list(mu_hat,B_hat,nw_hat,U_hat,loc,sc,eta))
 }
 
+
 background_statistics_br <- function(background_data){
   
   p=9
@@ -85,73 +88,88 @@ background_statistics_br <- function(background_data){
   mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
     colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
   
-  S = 0
+  S <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(
       background_data$character==1)& (background_data$writer_id==w),]
     if (nrow(df_writer)>2){
-      theta_w = matrix(colMeans(df_writer[,1:p]), nrow = 1)
+      n_writers <- n_writers+1
+      var_data <- unname(as.matrix(df_writer[,1:p]))
+      theta_w <- matrix(colMeans(var_data), nrow = 1)
       S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
       S <- S + S.this
     }
-  }
+  } 
   
-  B_hat = S/(length(unique(background_data$writer_id)) - 1)
-  #B_hat = cov(a_data)
+  B_hat = S/(n_writers - 1)
+  #B_hat = cov(background_data[,1:p])
+  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
   
-  if (any(is.na(B_hat)) || any(is.nan(B_hat))) {
-    B_hat[is.na(B_hat) | is.nan(B_hat)] <- 0
-    diag(B_hat) <- pmax(diag(B_hat), 1e-6)
-  }
-  if (!is.positive.definite(B_hat)) { B_hat <- as.matrix(nearPD(B_hat)$mat) }
+  
   
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
   for (l_id in 1:l){
-    letter_data = as.matrix(unname(background_data[(
-      background_data$character==l_id),1:p]))
-    if (nrow(letter_data)>2){
-      letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
-      beta_l = colMeans(letter_diff)
-      beta_mu[l_id,] = beta_l
-      S = 0
-      for (w in unique(background_data$writer_id)){
-        letter_writer = background_data[(
-          background_data$character==l_id)& (background_data$writer_id==w),1:p]
-        if (nrow(letter_writer)>2){
-          a_data_writer = background_data[(
-            background_data$character==1)& (background_data$writer_id==w),1:p]
+    letter_data = as.matrix(unname(background_data[(background_data$character==l_id),1:p]))
+    
+    letter_diff = letter_data - matrix(mu_hat[col(letter_data)], ncol = p)
+    beta_l = colMeans(letter_diff)
+    beta_mu[l_id,] = beta_l
+    
+    S = matrix(0, nrow = p, ncol = p)
+    n_writers_letter <- 0
+    
+    for (w in unique(background_data$writer_id)){
+      letter_writer = background_data[
+        (background_data$character==l_id) & 
+          (background_data$writer_id==w), 1:p, drop = FALSE
+      ]
+      
+      if (nrow(letter_writer)>2){
+        a_data_writer = background_data[
+          (background_data$character==1) & 
+            (background_data$writer_id==w), 1:p, drop = FALSE
+        ]
+        
+        if (nrow(a_data_writer)>2){
+          n_writers_letter <- n_writers_letter + 1
           
-          mu_hat_writer=matrix(colMeans(a_data_writer),nrow = 1)
-          
-          letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
+          mu_hat_writer = matrix(colMeans(a_data_writer), nrow = 1)
+          letter_diff_writer = as.matrix(letter_writer) - 
+            matrix(mu_hat_writer[col(as.matrix(letter_writer))], ncol = p)
           
           beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-          S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))
+          S.this <- t(beta_w - beta_l) %*% (beta_w - beta_l)
           S <- S + S.this
         }
       }
-      B_hat_l = S/(length(unique(background_data$writer_id)) - 1)
-      #B_hat_l = cov(letter_data)
-      if (any(is.na(B_hat_l)) || any(is.nan(B_hat_l))) {
-        B_hat_l[is.na(B_hat_l) | is.nan(B_hat_l)] <- 0
-        diag(B_hat_l) <- pmax(diag(B_hat_l), 1e-6)
-      }
-      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
-      beta_cov[,,l_id] = B_hat_l
     }
+    
+    if (n_writers_letter > 1){
+      B_hat_l = S/(n_writers_letter - 1)
+    } else {
+      B_hat_l = diag(1e-6, p)
+    }
+    
+    if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+    beta_cov[,,l_id] = B_hat_l
   }
   
   
   Sw = 0
+  n_rows <- 0
+  n_writers <- 0
   for (w in unique(background_data$writer_id)){
     df_writer = background_data[(background_data$writer_id==w),]
     if (nrow(df_writer)>2){
+      n_rows <- n_rows + nrow(df_writer)
+      n_writers <- n_writers+1
       Cov.this = cov(df_writer[,1:p])*(nrow(df_writer)-1)
       Sw <- Sw + Cov.this
     }
   }
-  W_hat <- Sw/(nrow(background_data) - length(unique(background_data$writer_id)))
+  W_hat <- Sw/(n_rows - n_writers)
   U_hat <- W_hat * (nw_hat - p  -1)
   
   
@@ -288,13 +306,13 @@ ml_per_writer_def <- function(character_data,w){
 }
 
 
-#ml_per_writer_def(db,'16')
+#ml_per_writer_def(db,'123')
 
 unique(db$writer_id)
 
 detectCores()
-cl <- makeCluster(5,
-                  outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
+cl <- makeCluster(12,
+                  outfile="C:/Users/lampis/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
 
 clusterEvalQ(cl, {
   library(dplyr)
@@ -327,7 +345,6 @@ write_xlsx(df_all,"Paper_experiments/models_ml_per_writer.xlsx")
 
 
 ssr <- read_excel("Paper_experiments/models_ml_per_writer.xlsx")
-
 
 
 ssr = as.data.frame(ssr)

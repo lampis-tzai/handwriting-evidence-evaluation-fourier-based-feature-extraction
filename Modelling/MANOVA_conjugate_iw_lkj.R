@@ -1,4 +1,4 @@
-setwd("C:/Users/ltzai/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/lampis/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -13,7 +13,7 @@ IAM_data <- read_excel("IAM_fourier_features_dataset/DB_loop_handwriting_ls.xlsx
 IAM_data = as.data.frame(IAM_data)
 
 #IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-#IAM_data[,1] = log(IAM_data[,1])
+IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -81,11 +81,11 @@ alphabet_map <- setNames(seq_along(int_characters), int_characters)
 
 
 # different writers
-writer_data_1 <- IAM_data[IAM_data$writer_id == "62", ]
+writer_data_1 <- IAM_data[IAM_data$writer_id == "113", ]
 
-writer_data_2 <- IAM_data[IAM_data$writer_id == "112", ]
+writer_data_2 <- IAM_data[IAM_data$writer_id == "117", ]
 
-background_data <- IAM_data[!(IAM_data$writer_id %in% c("62", "112")), ]
+background_data <- IAM_data[!(IAM_data$writer_id %in% c("113", "117")), ]
 
 sample_size <- floor(nrow(writer_data_1)/2)#min(50, nrow(writer_data_1))
 
@@ -183,7 +183,7 @@ S <- 0
 n_writers <- 0
 for (w in unique(background_data$writer_id)){
   df_writer = background_data[(
-    background_data$character==1)& (background_data$writer_id==w),]
+    background_data$character=='a')& (background_data$writer_id==w),]
   if (nrow(df_writer)>2){
     n_writers <- n_writers+1
     var_data <- unname(as.matrix(df_writer[,1:p]))
@@ -191,7 +191,7 @@ for (w in unique(background_data$writer_id)){
     S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
     S <- S + S.this
   }
-} 
+}
 
 B_hat = S/(n_writers - 1)
 #B_hat = cov(background_data[,1:p])
@@ -203,30 +203,45 @@ beta_cov = array(0, dim=c(p,p,l))
 for (l_id in 1:l){
   letter_data = as.matrix(unname(background_data[(background_data$character==int_characters[l_id]),1:p]))
   
-  letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
+  letter_diff = letter_data - matrix(mu_hat[col(letter_data)], ncol = p)
   beta_l = colMeans(letter_diff)
   beta_mu[l_id,] = beta_l
-  S = 0
-  n_rows <- 0
+  
+  S = matrix(0, nrow = p, ncol = p)
+  n_writers_letter <- 0
+  
   for (w in unique(background_data$writer_id)){
-    letter_writer = background_data[(
-      background_data$character==int_characters[l_id])& (background_data$writer_id==w),1:p]
-    if (nrow(letter_writer)>3){
-      n_rows <- n_rows + nrow(letter_writer)
-      a_data_writer = background_data[(
-        background_data$character=='a')& (background_data$writer_id==w),1:p]
-
-      mu_hat_writer=matrix(colMeans(a_data_writer),nrow = 1)
-
-      letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
-
-      beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-      S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))#*nrow(letter_writer)
-      S <- S + S.this
+    letter_writer = background_data[
+      (background_data$character==int_characters[l_id]) & 
+        (background_data$writer_id==w), 1:p, drop = FALSE
+    ]
+    
+    if (nrow(letter_writer)>2){
+      a_data_writer = background_data[
+        (background_data$character=='a') & 
+          (background_data$writer_id==w), 1:p, drop = FALSE
+      ]
+      
+      if (nrow(a_data_writer)>2){
+        n_writers_letter <- n_writers_letter + 1
+        
+        mu_hat_writer = matrix(colMeans(a_data_writer), nrow = 1)
+        letter_diff_writer = as.matrix(letter_writer) - 
+          matrix(mu_hat_writer[col(as.matrix(letter_writer))], ncol = p)
+        
+        beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
+        S.this <- t(beta_w - beta_l) %*% (beta_w - beta_l)
+        S <- S + S.this
+      }
     }
   }
-  B_hat_l = S/(n_rows - 1)
-  #B_hat_l = cov(letter_data)
+  
+  if (n_writers_letter > 1){
+    B_hat_l = S/(n_writers_letter - 1)
+  } else {
+    B_hat_l = diag(1e-6, p)
+  }
+  
   if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
   beta_cov[,,l_id] = B_hat_l
 }
