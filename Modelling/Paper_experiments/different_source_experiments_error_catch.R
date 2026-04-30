@@ -1,4 +1,4 @@
-setwd("C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
+setwd("C:/Users/lampis/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling")
 library(readxl)
 library(dplyr)
 library(MASS)
@@ -19,7 +19,7 @@ IAM_data = as.data.frame(IAM_data)
 
 
 #IAM_data[,2:9] = IAM_data[,2:9]/sqrt(IAM_data$area)
-#IAM_data[,1] = log(IAM_data[,1])
+IAM_data[,1] = log(IAM_data[,1])
 
 IAM_data = cbind(scale(IAM_data[,1:9]),IAM_data[,10:ncol(IAM_data)])
 
@@ -122,40 +122,53 @@ background_statistics_br <- function(background_data){
   if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
   
   
+  
   beta_mu = array(0, dim=c(l,p))
   beta_cov = array(0, dim=c(p,p,l))
   for (l_id in 1:l){
-    letter_data = as.matrix(unname(background_data[(
-      background_data$character==l_id),1:p]))
-    if (nrow(letter_data)>2){
-      letter_diff = letter_data - matrix(mu_hat[col(letter_data)],ncol = p)
-      beta_l = colMeans(letter_diff)
-      beta_mu[l_id,] = beta_l
-      S = 0
-      n_rows <- 0
-      for (w in unique(background_data$writer_id)){
-        letter_writer = background_data[(
-          background_data$character==l_id)& (background_data$writer_id==w),1:p]
-        if (nrow(letter_writer)>2){
-          n_rows <- n_rows + nrow(letter_writer)
-          a_data_writer = background_data[(
-            background_data$character==1)& (background_data$writer_id==w),1:p]
+    letter_data = as.matrix(unname(background_data[(background_data$character==l_id),1:p]))
+    
+    letter_diff = letter_data - matrix(mu_hat[col(letter_data)], ncol = p)
+    beta_l = colMeans(letter_diff)
+    beta_mu[l_id,] = beta_l
+    
+    S = matrix(0, nrow = p, ncol = p)
+    n_writers_letter <- 0
+    
+    for (w in unique(background_data$writer_id)){
+      letter_writer = background_data[
+        (background_data$character==l_id) & 
+          (background_data$writer_id==w), 1:p, drop = FALSE
+      ]
+      
+      if (nrow(letter_writer)>2){
+        a_data_writer = background_data[
+          (background_data$character==1) & 
+            (background_data$writer_id==w), 1:p, drop = FALSE
+        ]
+        
+        if (nrow(a_data_writer)>2){
+          n_writers_letter <- n_writers_letter + 1
           
-          mu_hat_writer=matrix(colMeans(a_data_writer),nrow = 1)
-          
-          letter_diff_writer = letter_writer - matrix(mu_hat_writer[col(letter_writer)],ncol = p)
+          mu_hat_writer = matrix(colMeans(a_data_writer), nrow = 1)
+          letter_diff_writer = as.matrix(letter_writer) - 
+            matrix(mu_hat_writer[col(as.matrix(letter_writer))], ncol = p)
           
           beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-          S.this <- (t(beta_w - beta_l) %*% (beta_w - beta_l))
+          S.this <- t(beta_w - beta_l) %*% (beta_w - beta_l)
           S <- S + S.this
         }
       }
-      B_hat_l = S/(n_rows - 1)
-      #B_hat_l = cov(letter_data)
-      
-      if (!is.positive.definite(B_hat_l)) { B_hat_l <- as.matrix(nearPD(B_hat_l)$mat) }
-      beta_cov[,,l_id] = B_hat_l
     }
+    
+    if (n_writers_letter > 1){
+      B_hat_l = S/(n_writers_letter - 1)
+    } else {
+      B_hat_l = diag(1e-6, p)
+    }
+    
+    if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
+    beta_cov[,,l_id] = B_hat_l
   }
   
   
@@ -222,7 +235,7 @@ different_source_def <- function(character_data, composition, w) {
   background_data <- character_data[!(character_data$writer_id %in% c(composition[w, 1],
                                                                       composition[w, 2])), ]
   
-  for (iter_for_eval in seq_len(1)) {
+  for (iter_for_eval in seq_len(100)) {
     
     bf_rows <- list()
     i       <- 1
@@ -451,21 +464,21 @@ different_source_def <- function(character_data, composition, w) {
   return(df_all)
 }
 
-# dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
-# dsr = as.data.frame(dsr)
-# manova_lkj<-dsr[(dsr$model=='manova_iw' & dsr$BF>-50),]
-# mean(manova_lkj$BF>0)
-# comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
+dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
+dsr = as.data.frame(dsr)
+manova_lkj<-dsr[(dsr$model=='manova_lkj' & dsr$BF>-50),]
+mean(manova_lkj$BF>0)
+comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
 
-comp_writers = t(combn(unique(IAM_data$writer_id), 2))
+#comp_writers = t(combn(unique(IAM_data$writer_id), 2))
 
 w.list <- sapply(1:nrow(comp_writers), list)
 
-example_df <- different_source_def(IAM_data,comp_writers, sample(w.list,1)[[1]])
-example_df
+# example_df <- different_source_def(IAM_data,comp_writers, w.list[[1]])
+# example_df
 
-cl <- makeCluster(5,
-                  outfile="C:/Users/Lampis_lab/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
+cl <- makeCluster(12,
+                  outfile="C:/Users/lampis/Desktop/PhD/Handwritten_Loop_characters/handwriting-evidence-evaluation-fourier-based-feature-extraction/Modelling/Paper_experiments/log.txt")
 
 clusterEvalQ(cl, {
   library(dplyr)
@@ -496,7 +509,7 @@ df_all <- do.call("rbind", saves)
 write_xlsx(df_all,"Paper_experiments/different_source_results.xlsx")
 
 
-dsr <- read_excel("Paper_experiments/different_source_results_small_BF.xlsx")
+dsr <- read_excel("Paper_experiments/different_source_results.xlsx")
 dsr = as.data.frame(dsr)
 
 indx <- apply(dsr, 2, function(x) any(is.na(x) | is.infinite(x)))
@@ -562,8 +575,8 @@ plot = ggplot(dsr,
     colour = guide_legend(override.aes = list(size = 5))
   )
 
-jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
+#jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
 plot
-dev.off()
+#dev.off()
 
 
