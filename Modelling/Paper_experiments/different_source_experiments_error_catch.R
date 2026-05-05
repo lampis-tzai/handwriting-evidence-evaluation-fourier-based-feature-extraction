@@ -517,6 +517,7 @@ colnames(dsr)[indx]
 dsr[sapply(dsr, is.infinite)] <- NA
 dsr[is.na(dsr)] = 0
 
+
 mean(dsr$BF>0)
 fp_number <- as.data.frame(dsr %>% group_by(model, character) %>% summarise(N= n(), FN = sum(BF>0)))
 fp_number[fn_number$character=='all',]
@@ -558,7 +559,7 @@ plot = ggplot(dsr,
               aes(x = Prior_approach, y = BF, fill = Prior_approach)) +
   geom_boxplot() +
   facet_wrap(~model,ncol = 9) +
-  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-300, 50)) +
+  scale_y_continuous(name = TeX(r"(\textbf{LogBF})"), limits = c(-210, 50)) +
   scale_x_discrete(labels = c("(1)","(2)","(3)"), name = "Models")+
   #labs(title="Logarithmic Bayes Factors for \n Different Source Comparisons") + 
   #theme(plot.title = element_text(hjust = 0.5))+
