@@ -381,15 +381,10 @@ stopCluster(cl)
 
 df_all <- do.call("rbind", saves)
 
-write_xlsx(df_all,"Paper_experiments/same_source_results_ls.xlsx")
+write_xlsx(df_all,"Paper_experiments/same_source_results.xlsx")
 
 
-ssr <- read_excel("Paper_experiments/same_source_results_ls.xlsx")
-
-
-
-
-
+ssr <- read_excel("Paper_experiments/same_source_results.xlsx")
 
 
 #manova_lkj<- ssr[(ssr$model=='manova_lkj'),]
@@ -406,8 +401,10 @@ ssr[is.na(ssr)] = 0
 
 ssr_binary = ssr
 mean(ssr_binary$BF<0)
-as.data.frame(ssr %>% group_by(model, character) %>% summarise(FN = mean(BF<0)))
-
+fn_number <- as.data.frame(ssr %>% group_by(model, character) %>% summarise(N= n(), FN = sum(BF<0)))
+fn_number[fn_number$character=='all',]
+fn_perc <- as.data.frame(ssr %>% group_by(model, character) %>% summarise(FN = mean(BF<0)*100))
+fn_perc[fn_perc$character=='all',]
 
 #plot
 
@@ -463,6 +460,6 @@ plot = ggplot(ssr,
     colour = guide_legend(override.aes = list(size = 5))
   )
 
-#jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
+#jpeg("Paper_experiments/plots/ss_boxplot_iam.jpg",width=3920, height=2000, res=300)
 plot
 #dev.off()

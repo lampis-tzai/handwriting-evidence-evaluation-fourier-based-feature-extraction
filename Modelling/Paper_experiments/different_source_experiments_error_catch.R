@@ -466,7 +466,7 @@ different_source_def <- function(character_data, composition, w) {
 
 dsr <- read_excel("Paper_experiments/different_source_results_all_one.xlsx")
 dsr = as.data.frame(dsr)
-manova_lkj<-dsr[(dsr$model=='manova_lkj' & dsr$BF>-50),]
+manova_lkj<-dsr[(dsr$model=='manova_lkj' & dsr$BF>-100),]
 mean(manova_lkj$BF>0)
 comp_writers <- unname(as.matrix(manova_lkj[order(-manova_lkj$BF),1:2]))
 
@@ -518,9 +518,12 @@ dsr[sapply(dsr, is.infinite)] <- NA
 dsr[is.na(dsr)] = 0
 
 mean(dsr$BF>0)
-FPR <- as.data.frame(dsr %>% group_by(model, character) %>% summarize(FP = mean(BF>0)))
+fp_number <- as.data.frame(dsr %>% group_by(model, character) %>% summarise(N= n(), FN = sum(BF>0)))
+fp_number[fn_number$character=='all',]
+fp_perc <- as.data.frame(dsr %>% group_by(model, character) %>% summarise(FN = mean(BF>0)*100))
+fp_perc[fn_perc$character=='all',]
 
-FPR[order(FPR$FP),]
+
 #plot
 
 dsr$Prior_approach <- ifelse((dsr$model=="niw_conjugate" | dsr$model=="manova_conjugate"),"(1) NIW Conjugate",
@@ -575,8 +578,6 @@ plot = ggplot(dsr,
     colour = guide_legend(override.aes = list(size = 5))
   )
 
-#jpeg("Paper_experiments/plots/ds_boxplot.jpg",width=3920, height=2000, res=300)
+jpeg("Paper_experiments/plots/ds_boxplot_iam.jpg",width=3920, height=2000, res=300)
 plot
-#dev.off()
-
-
+dev.off()
