@@ -100,75 +100,119 @@ background_statistics_br <- function(background_data){
   nw_hat = nw.min
   
   a_data = background_data[(background_data$character==1),]
-  mu_hat=matrix(colMeans(do.call(rbind, lapply(unique(a_data$writer_id), function(w)
-    colMeans(a_data[a_data$writer_id == w, 1:p])))), nrow = 1)
+  # Identify writers with sufficient observations for character 'a'
+  writers_a <- unique(a_data$writer_id)
   
-  S <- 0
-  n_writers <- 0
-  for (w in unique(background_data$writer_id)){
-    df_writer = background_data[(
-      background_data$character==1)& (background_data$writer_id==w),]
-    if (nrow(df_writer)>2){
-      n_writers <- n_writers+1
-      var_data <- unname(as.matrix(df_writer[,1:p]))
-      theta_w <- matrix(colMeans(var_data), nrow = 1)
-      S.this <- (t(theta_w - mu_hat) %*% (theta_w - mu_hat))
-      S <- S + S.this
-    }
-  } 
+  eligible_writers_a <- writers_a[
+    sapply(writers_a, function(w) {
+      nrow(a_data[a_data$writer_id == w, 1:p, drop = FALSE]) > 2
+    })
+  ]
   
-  B_hat = S/(n_writers - 1)
-  #B_hat = cov(background_data[,1:p])
-  if (!is.positive.definite(B_hat)){B_hat = as.matrix(nearPD(B_hat)$mat)}
+  # Writer-specific means for character 'a'
+  theta_a <- do.call(
+    rbind,
+    lapply(eligible_writers_a, function(w) {
+      colMeans(
+        a_data[
+          a_data$writer_id == w,
+          1:p,
+          drop = FALSE
+        ]
+      )
+    })
+  )
+  
+  # Overall mean across writers
+  mu_hat <- matrix(
+    colMeans(theta_a),
+    nrow = 1
+  )
+  
+  # Between-writer covariance
+  if (nrow(theta_a) > 1) {
+    B_hat <- cov(theta_a)
+  } else {
+    B_hat <- diag(1e-6, p)
+  }
+  
+  # Ensure positive definiteness
+  if (!is.positive.definite(B_hat)) {
+    B_hat <- as.matrix(nearPD(B_hat)$mat)
+  }
   
   
+  beta_mu <- array(0, dim = c(l, p))
+  beta_cov <- array(0, dim = c(p, p, l))
   
-  beta_mu = array(0, dim=c(l,p))
-  beta_cov = array(0, dim=c(p,p,l))
-  for (l_id in 1:l){
-    letter_data = as.matrix(unname(background_data[(background_data$character==l_id),1:p]))
+  for (l_id in 1:l) {
     
-    letter_diff = letter_data - matrix(mu_hat[col(letter_data)], ncol = p)
-    beta_l = colMeans(letter_diff)
-    beta_mu[l_id,] = beta_l
+    # Store writer-specific estimates of beta_{w,l}
+    beta_w_list <- list()
     
-    S = matrix(0, nrow = p, ncol = p)
-    n_writers_letter <- 0
-    
-    for (w in unique(background_data$writer_id)){
-      letter_writer = background_data[
-        (background_data$character==l_id) & 
-          (background_data$writer_id==w), 1:p, drop = FALSE
+    for (w in unique(background_data$writer_id)) {
+      
+      # Observations for character l and writer w
+      letter_writer <- background_data[
+        background_data$character == int_characters[l_id] &
+          background_data$writer_id == w,
+        1:p,
+        drop = FALSE
       ]
       
-      if (nrow(letter_writer)>2){
-        a_data_writer = background_data[
-          (background_data$character==1) & 
-            (background_data$writer_id==w), 1:p, drop = FALSE
-        ]
+      # Observations for reference character 'a' and writer w
+      a_data_writer <- background_data[
+        background_data$character == "a" &
+          background_data$writer_id == w,
+        1:p,
+        drop = FALSE
+      ]
+      
+      # Retain writers with sufficient observations for both characters
+      if (nrow(letter_writer) > 2 && nrow(a_data_writer) > 2) {
         
-        if (nrow(a_data_writer)>2){
-          n_writers_letter <- n_writers_letter + 1
-          
-          mu_hat_writer = matrix(colMeans(a_data_writer), nrow = 1)
-          letter_diff_writer = as.matrix(letter_writer) - 
-            matrix(mu_hat_writer[col(as.matrix(letter_writer))], ncol = p)
-          
-          beta_w = matrix(colMeans(letter_diff_writer), nrow = 1)
-          S.this <- t(beta_w - beta_l) %*% (beta_w - beta_l)
-          S <- S + S.this
-        }
+        # Writer-specific mean for the reference character 'a'
+        mu_hat_writer <- colMeans(a_data_writer)
+        
+        # Character-specific differences from the writer's reference character
+        letter_diff_writer <- sweep(
+          as.matrix(letter_writer),
+          2,
+          mu_hat_writer,
+          FUN = "-"
+        )
+        
+        # Writer-specific character effect beta_{w,l}
+        beta_w <- colMeans(letter_diff_writer)
+        
+        beta_w_list[[length(beta_w_list) + 1]] <- beta_w
       }
     }
     
-    if (n_writers_letter > 1){
-      B_hat_l = S/(n_writers_letter - 1)
+    # Combine writer-specific effects into a matrix:
+    # rows = writers, columns = features
+    beta_w_mat <- do.call(rbind, beta_w_list)
+    
+    n_writers_letter <- nrow(beta_w_mat)
+    
+    # Population mean of the writer-specific character effects
+    beta_l <- colMeans(beta_w_mat)
+    
+    beta_mu[l_id, ] <- beta_l
+    
+    # Between-writer covariance of the character-specific effects
+    if (n_writers_letter > 1) {
+      B_hat_l <- cov(beta_w_mat)
     } else {
-      B_hat_l = diag(1e-6, p)
+      B_hat_l <- diag(1e-6, p)
     }
     
-    if (!is.positive.definite(B_hat_l)){B_hat_l = as.matrix(nearPD(B_hat_l)$mat)}
-    beta_cov[,,l_id] = B_hat_l
+    # Ensure positive definiteness
+    if (!is.positive.definite(B_hat_l)) {
+      B_hat_l <- as.matrix(nearPD(B_hat_l)$mat)
+    }
+    
+    beta_cov[, , l_id] <- B_hat_l
   }
   
   
