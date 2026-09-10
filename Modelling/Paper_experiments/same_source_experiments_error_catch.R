@@ -421,14 +421,14 @@ library(stringr)
 split_data = str_split_fixed(ssr$model, "_", 2)
 ssr$model = split_data[,1]
 
-ssr$model <- ifelse(ssr$model=='manova',"MANOVA","Normal") 
+ssr$model <- ifelse(ssr$model=='manova',"Linear","Normal") 
 
 ssr$model <- paste0(ssr$model, ' ', ssr$character)
 unique(ssr$model)
 
 ssr$model <- factor(ssr$model, levels =c("Normal a", "Normal b", "Normal d", "Normal e",
                                          "Normal g", "Normal o", "Normal p", "Normal all", 
-                                         "MANOVA all"))
+                                         "Linear all"))
 
 
 
@@ -460,6 +460,6 @@ plot = ggplot(ssr,
     colour = guide_legend(override.aes = list(size = 5))
   )
 
-#jpeg("Paper_experiments/plots/ss_boxplot_iam.jpg",width=3920, height=2000, res=300)
+jpeg("Paper_experiments/plots/ss_boxplot_iam.jpg",width=3920, height=2000, res=300)
 plot
-#dev.off()
+dev.off()

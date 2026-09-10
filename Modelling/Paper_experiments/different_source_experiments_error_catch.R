@@ -520,9 +520,9 @@ dsr[is.na(dsr)] = 0
 
 mean(dsr$BF>0)
 fp_number <- as.data.frame(dsr %>% group_by(model, character) %>% summarise(N= n(), FN = sum(BF>0)))
-fp_number[fn_number$character=='all',]
+fp_number[fp_number$character=='all',]
 fp_perc <- as.data.frame(dsr %>% group_by(model, character) %>% summarise(FN = mean(BF>0)*100))
-fp_perc[fn_perc$character=='all',]
+fp_perc[fp_perc$character=='all',]
 
 
 #plot
@@ -540,14 +540,14 @@ library(stringr)
 split_data = str_split_fixed(dsr$model, "_", 2)
 dsr$model = split_data[,1]
 
-dsr$model <- ifelse(dsr$model=='manova',"MANOVA","Normal") 
+dsr$model <- ifelse(dsr$model=='manova',"Linear","Normal") 
 
 dsr$model <- paste0(dsr$model, ' ', dsr$character)
 unique(dsr$model)
 
 dsr$model <- factor(dsr$model, levels =c("Normal a", "Normal b", "Normal d", "Normal e",
                                          "Normal g", "Normal o", "Normal p", "Normal all", 
-                                         "MANOVA all"))
+                                         "Linear all"))
 
 
 
